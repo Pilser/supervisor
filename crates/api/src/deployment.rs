@@ -14,7 +14,7 @@ impl DeploymentApi {
     }
 
     /// Parse a deployment manifest without depending on receiver internals.
-    pub fn parse(&self, raw: &str) -> core::Result<deployment::DeploymentManifest> {
+    pub fn parse(&self, raw: &str) -> shared::Result<deployment::DeploymentManifest> {
         deployment::parse_manifest(raw)
     }
 }

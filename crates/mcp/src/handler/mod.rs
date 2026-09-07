@@ -75,7 +75,7 @@ pub fn proxy_request(
 ) -> anyhow::Result<Value> {
     let rtype = proxy::RequestType::from_str(request_type)
         .ok_or_else(|| anyhow::anyhow!("unknown wrapper request type: {request_type}"))?;
-    let tenant = core::TenantContext::new(tenant_id, "", "", "");
+    let tenant = shared::TenantContext::new(tenant_id, "", "", "");
     proxy::RequestBuilder::new(rtype)
         .operation(operation)
         .tenant(tenant)

@@ -1,6 +1,6 @@
 //! Heartbeat interval configuration.
 
-use core::{Result, SupervisorError};
+use shared::{Result, SupervisorError};
 use serde::{Deserialize, Serialize};
 
 /// Seconds between heartbeats.

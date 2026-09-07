@@ -1,6 +1,6 @@
 //! Listen for commands from the wrapper.
 
-use core::{Result, SupervisorError};
+use shared::{Result, SupervisorError};
 
 /// Bind the command port. The accept loop is driven by the caller.
 pub async fn start_listener(port: u16, telemetry: &telemetry::Telemetry) -> Result<()> {

@@ -1,6 +1,6 @@
 //! Listen for deployment pushes from the wrapper.
 
-use core::{Result, SupervisorError};
+use shared::{Result, SupervisorError};
 
 /// Bind the deployment port. The accept loop is driven by the caller.
 pub async fn listen_for_deployment(port: u16, telemetry: &telemetry::Telemetry) -> Result<()> {

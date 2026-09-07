@@ -1,6 +1,6 @@
 //! Request a category-specific deployment from the wrapper.
 
-use core::{Result, SupervisorError};
+use shared::{Result, SupervisorError};
 
 /// Ask the wrapper for the deployment package of `category`.
 pub async fn request_deployment(

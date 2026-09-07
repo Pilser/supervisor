@@ -1,6 +1,6 @@
 //! Send a heartbeat to the wrapper over TCP (NDJSON envelope).
 
-use core::{Result, SupervisorError};
+use shared::{Result, SupervisorError};
 
 use super::payload::HeartbeatPayload;
 
@@ -18,7 +18,7 @@ pub async fn send_heartbeat(
     let client = proxy::ProxyClient::new(wrapper_address, wrapper_port, token)
         .map_err(|e| SupervisorError::Network(format!("proxy client: {e}")))?;
     let tenant =
-        core::TenantContext::new(payload.tenant_id.clone(), payload.vm_id.clone(), "", "");
+        shared::TenantContext::new(payload.tenant_id.clone(), payload.vm_id.clone(), "", "");
     let data = serde_json::to_value(payload)
         .map_err(|e| SupervisorError::Heartbeat(format!("heartbeat payload: {e}")))?;
     let builder = proxy::RequestBuilder::new(proxy::RequestType::Heartbeat)

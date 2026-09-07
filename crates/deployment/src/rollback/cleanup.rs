@@ -1,6 +1,6 @@
 //! Cleanup failed deployment artifacts.
 
-use core::{Result, SupervisorError};
+use shared::{Result, SupervisorError};
 
 use super::snapshot::Snapshot;
 

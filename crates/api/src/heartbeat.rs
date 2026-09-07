@@ -8,7 +8,7 @@ pub struct HeartbeatApi {
 }
 
 impl HeartbeatApi {
-    pub fn new(interval_secs: u64) -> core::Result<Self> {
+    pub fn new(interval_secs: u64) -> shared::Result<Self> {
         Ok(Self {
             interval: heartbeat::HeartbeatInterval::new(interval_secs)?,
             custom: heartbeat::CustomFields::new(),
@@ -22,7 +22,7 @@ impl HeartbeatApi {
         tenant_id: &str,
         programs: serde_json::Value,
         resources: serde_json::Value,
-    ) -> core::Result<heartbeat::HeartbeatPayload> {
+    ) -> shared::Result<heartbeat::HeartbeatPayload> {
         heartbeat::build_heartbeat(vm_id, tenant_id, programs, resources, self.custom.to_json())
     }
 }

@@ -1,6 +1,6 @@
 //! Accept an incoming deployment package.
 
-use core::{Result, SupervisorError};
+use shared::{Result, SupervisorError};
 
 use crate::artifacts::manifest::DeploymentManifest;
 

@@ -1,6 +1,6 @@
 //! Report deployment status to the wrapper.
 
-use core::Result;
+use shared::Result;
 
 use crate::artifacts::manifest::DeploymentManifest;
 

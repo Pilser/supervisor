@@ -1,6 +1,6 @@
 //! Watch a process by PID.
 
-use core::{Result, SupervisorError};
+use shared::{Result, SupervisorError};
 use serde::{Deserialize, Serialize};
 
 /// A process currently under supervision.
@@ -30,7 +30,7 @@ pub fn watch_process(
     Ok(WatchedProcess {
         pid,
         name: name.to_string(),
-        started_unix_millis: core::now_unix_millis(),
+        started_unix_millis: shared::now_unix_millis(),
     })
 }
 

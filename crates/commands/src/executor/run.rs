@@ -1,6 +1,6 @@
 //! Execute a parsed command via the built-in handlers.
 
-use core::{Result, SupervisorError};
+use shared::{Result, SupervisorError};
 
 use super::result::CommandResult;
 use crate::listener::parse::IncomingCommand;

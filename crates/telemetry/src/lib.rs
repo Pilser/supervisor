@@ -122,5 +122,5 @@ fn output_forwards(output: &str) -> bool {
 
 /// Current RFC3339 timestamp with nanosecond precision.
 pub fn now_string() -> String {
-    core::now_rfc3339()
+    shared::now_rfc3339()
 }

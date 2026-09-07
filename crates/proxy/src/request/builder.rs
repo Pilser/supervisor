@@ -5,7 +5,7 @@
 //! `{ "type", "tenant_id", "timestamp", "payload": { "op", "data" } }` where
 //! `tenant_id` is always present and `timestamp` is RFC3339.
 
-use core::TenantContext;
+use shared::TenantContext;
 use serde_json::{json, Value};
 
 use super::tenant;
@@ -79,7 +79,7 @@ impl RequestBuilder {
         Ok(json!({
             "type": self.rtype.as_str(),
             "tenant_id": tenant_id,
-            "timestamp": core::now_rfc3339(),
+            "timestamp": shared::now_rfc3339(),
             "payload": {
                 "op": self.operation,
                 "data": self.data,

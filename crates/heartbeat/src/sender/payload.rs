@@ -1,6 +1,6 @@
 //! Heartbeat payload construction.
 
-use core::Result;
+use shared::Result;
 use serde::{Deserialize, Serialize};
 
 /// Payload posted to the wrapper on every heartbeat.
@@ -25,7 +25,7 @@ pub fn build_heartbeat(
     Ok(HeartbeatPayload {
         vm_id: vm_id.to_string(),
         tenant_id: tenant_id.to_string(),
-        timestamp_unix_millis: core::now_unix_millis(),
+        timestamp_unix_millis: shared::now_unix_millis(),
         programs,
         resources,
         custom,

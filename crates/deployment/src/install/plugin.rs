@@ -2,7 +2,7 @@
 
 use std::path::Path;
 
-use core::Result;
+use shared::Result;
 
 /// Install the staged plugin at `staged`. Stub: hot-reload wiring lands with
 /// the plugin pipeline.

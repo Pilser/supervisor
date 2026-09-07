@@ -1,6 +1,6 @@
 //! Kill a frozen process.
 
-use core::Result;
+use shared::Result;
 
 /// Kill `pid`. Returns true when a process was actually terminated.
 pub fn kill_process(pid: u32, telemetry: &telemetry::Telemetry) -> Result<bool> {

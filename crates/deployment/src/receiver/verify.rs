@@ -1,6 +1,6 @@
 //! Verify checksums and signatures.
 
-use core::{Result, SupervisorError};
+use shared::{Result, SupervisorError};
 
 /// Verify artifact bytes against the manifest checksum.
 /// Stub: enforces presence and non-emptiness; real hash check lands with the

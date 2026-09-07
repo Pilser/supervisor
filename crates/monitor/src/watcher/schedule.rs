@@ -1,6 +1,6 @@
 //! Monitoring interval schedule.
 
-use core::{Result, SupervisorError};
+use shared::{Result, SupervisorError};
 use serde::{Deserialize, Serialize};
 
 /// How often the monitor polls watched processes.

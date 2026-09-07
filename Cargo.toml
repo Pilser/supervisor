@@ -5,7 +5,7 @@ edition = "2024"
 
 [dependencies]
 api = { path = "crates/api" }
-supervisor_core = { path = "crates/core", package = "core" }
+supervisor_core = { path = "crates/shared", package = "shared" }
 telemetry = { path = "crates/telemetry" }
 tokio = { workspace = true }
 serde = { workspace = true }
@@ -18,7 +18,7 @@ toml = "0.8"
 [workspace]
 members = [
     ".",
-    "crates/core",
+    "crates/shared",
     "crates/telemetry",
     "crates/proxy",
     "crates/mcp",

@@ -2,7 +2,7 @@
 
 use std::path::Path;
 
-use core::{Result, SupervisorError};
+use shared::{Result, SupervisorError};
 
 /// Copy the staged config file to `target`.
 pub async fn install_config(

@@ -1,6 +1,6 @@
 //! Hook dispatch for supervisor plugins.
 //!
-//! Plugins subscribe to `core::HookPoint` variants (OnPluginLoaded,
+//! Plugins subscribe to `shared::HookPoint` variants (OnPluginLoaded,
 //! OnProcessCrashed, OnHeartbeatSent, …) and the host routes events to every
 //! subscriber, ordered by priority then insertion order.
 
@@ -13,7 +13,7 @@ use std::sync::{Arc, Mutex};
 
 use crate::Result;
 
-pub use core::HookPoint;
+pub use shared::HookPoint;
 
 /// A plugin hook handler: receives the deserialized event payload.
 pub type HookCallback = dyn Fn(&serde_json::Value) -> Result<()> + Send + Sync;

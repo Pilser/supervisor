@@ -49,7 +49,7 @@ impl Event {
     pub fn new() -> Self {
         Self {
             id: EventId::new().to_string(),
-            timestamp: core::now_rfc3339(),
+            timestamp: shared::now_rfc3339(),
             level: Level::Info,
             kind: String::new(),
             category: String::new(),

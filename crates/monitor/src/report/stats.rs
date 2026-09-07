@@ -1,6 +1,6 @@
 //! Uptime, restart count, crash count.
 
-use core::Result;
+use shared::Result;
 use serde::{Deserialize, Serialize};
 
 /// Aggregate monitor statistics.
@@ -14,7 +14,7 @@ pub struct MonitorStats {
 impl Default for MonitorStats {
     fn default() -> Self {
         Self {
-            started_unix_millis: core::now_unix_millis(),
+            started_unix_millis: shared::now_unix_millis(),
             restarts: 0,
             crashes: 0,
         }
@@ -47,6 +47,6 @@ impl MonitorStats {
     }
 
     pub fn uptime_secs(&self) -> u64 {
-        core::now_unix_millis().saturating_sub(self.started_unix_millis) / 1000
+        shared::now_unix_millis().saturating_sub(self.started_unix_millis) / 1000
     }
 }

@@ -1,6 +1,6 @@
 //! Receive large file streams in chunks.
 
-use core::{Result, SupervisorError};
+use shared::{Result, SupervisorError};
 use serde::{Deserialize, Serialize};
 
 /// One chunk of a streamed artifact.

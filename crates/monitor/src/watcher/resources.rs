@@ -1,6 +1,6 @@
 //! Watch CPU and memory usage via `sysinfo`.
 
-use core::Result;
+use shared::Result;
 use serde::{Deserialize, Serialize};
 
 /// Point-in-time resource snapshot.

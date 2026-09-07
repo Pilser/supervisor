@@ -59,7 +59,7 @@ impl ForwardClient {
             let envelope = serde_json::json!({
                 "type": "telemetry.event",
                 "tenant_id": event.tenant_id.clone().unwrap_or_else(|| self.tenant_id.clone()),
-                "timestamp": core::now_rfc3339(),
+                "timestamp": shared::now_rfc3339(),
                 "payload": payload,
             });
             out.push_str(&serde_json::to_string(&envelope)?);

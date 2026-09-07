@@ -8,7 +8,7 @@ name = "mcp"
 path = "src/lib.rs"
 
 [dependencies]
-core = { path = "../core" }
+shared = { path = "../shared" }
 proxy = { path = "../proxy" }
 telemetry = { path = "../telemetry" }
 serde = { workspace = true }

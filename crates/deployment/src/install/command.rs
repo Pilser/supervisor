@@ -2,7 +2,7 @@
 
 use std::path::Path;
 
-use core::Result;
+use shared::Result;
 
 /// Run the staged command when the artifact asked for it.
 pub async fn install_command(

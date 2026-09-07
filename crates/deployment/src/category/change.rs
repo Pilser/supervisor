@@ -1,6 +1,6 @@
 //! Handle category change: re-deploy everything.
 
-use core::Result;
+use shared::Result;
 
 /// React to a tenant category change by triggering a full re-deploy.
 pub async fn handle_category_change(

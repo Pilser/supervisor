@@ -2,7 +2,7 @@
 
 use std::path::{Path, PathBuf};
 
-use core::{Result, SupervisorError};
+use shared::{Result, SupervisorError};
 use serde::{Deserialize, Serialize};
 
 /// A snapshot of pre-deployment files that can be reverted.

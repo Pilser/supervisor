@@ -1,6 +1,6 @@
 //! Attaching tenant identity to every wrapper request.
 
-use core::TenantContext;
+use shared::TenantContext;
 use serde_json::Value;
 
 /// Extract the `tenant_id` string from a [`TenantContext`].

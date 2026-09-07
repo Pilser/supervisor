@@ -8,7 +8,7 @@ pub mod types;
 pub use builder::RequestBuilder;
 pub use types::RequestType;
 
-use core::TenantContext;
+use shared::TenantContext;
 use serde_json::Value;
 
 /// A fully-specified wrapper request: type, operation, tenant and data.

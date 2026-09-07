@@ -2,7 +2,7 @@
 
 use crate::hooks::HookDispatcher;
 use crate::Result;
-use core::HookPoint;
+use shared::HookPoint;
 
 impl HookDispatcher {
     /// Deliver `event` to every plugin subscribed to `point`, in priority then

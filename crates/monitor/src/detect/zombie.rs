@@ -1,6 +1,6 @@
 //! Detect zombie processes.
 
-use core::Result;
+use shared::Result;
 
 use crate::watcher::process::is_running;
 

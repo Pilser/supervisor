@@ -8,7 +8,7 @@ name = "deployment"
 path = "src/lib.rs"
 
 [dependencies]
-core = { path = "../core" }
+shared = { path = "../shared" }
 telemetry = { path = "../telemetry" }
 proxy = { path = "../proxy" }
 commands = { path = "../commands" }

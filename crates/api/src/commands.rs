@@ -12,7 +12,7 @@ impl CommandsApi {
     }
 
     /// Parse and enqueue an incoming command.
-    pub fn receive(&mut self, raw: &str, priority: commands::Priority) -> core::Result<()> {
+    pub fn receive(&mut self, raw: &str, priority: commands::Priority) -> shared::Result<()> {
         let cmd = commands::listener::parse_command(raw)?;
         self.queue.enqueue(cmd, priority);
         Ok(())

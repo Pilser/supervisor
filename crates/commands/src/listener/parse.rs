@@ -1,6 +1,6 @@
 //! Parse incoming commands.
 
-use core::{Result, SupervisorError};
+use shared::{Result, SupervisorError};
 use serde::{Deserialize, Serialize};
 
 /// A parsed wrapper command.

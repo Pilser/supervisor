@@ -2,7 +2,7 @@
 
 use std::path::Path;
 
-use core::{Result, SupervisorError};
+use shared::{Result, SupervisorError};
 
 /// Copy the staged binary to `target` and mark it executable.
 pub async fn install_binary(

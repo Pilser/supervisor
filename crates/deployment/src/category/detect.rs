@@ -1,6 +1,6 @@
 //! Detect the current tenant category.
 
-use core::Result;
+use shared::Result;
 
 /// Current category from the environment, defaulting to `"default"`.
 pub fn detect_category() -> Result<String> {

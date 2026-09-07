@@ -2,7 +2,7 @@
 
 use std::path::PathBuf;
 
-use core::{Result, SupervisorError};
+use shared::{Result, SupervisorError};
 
 use super::manifest::DeploymentArtifact;
 use crate::receiver::verify::verify_checksum;

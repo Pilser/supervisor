@@ -1,8 +1,8 @@
 //! Parse the deployment manifest sent by the wrapper.
 
-use core::{Result, SupervisorError};
+use shared::{Result, SupervisorError};
 
-pub use core::{DeploymentArtifact, DeploymentManifest};
+pub use shared::{DeploymentArtifact, DeploymentManifest};
 
 /// Parse a JSON deployment manifest.
 pub fn parse_manifest(raw: &str) -> Result<DeploymentManifest> {

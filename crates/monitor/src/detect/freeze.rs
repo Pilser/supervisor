@@ -2,7 +2,7 @@
 
 use std::collections::HashMap;
 
-use core::Result;
+use shared::Result;
 use serde::{Deserialize, Serialize};
 
 /// Tracks last-seen pings per PID; stale entries count as frozen.
@@ -22,12 +22,12 @@ impl FreezeDetector {
 
     /// Record a successful ping/response from `pid`.
     pub fn mark_seen(&mut self, pid: u32) {
-        self.last_seen.insert(pid, core::now_unix_millis());
+        self.last_seen.insert(pid, shared::now_unix_millis());
     }
 
     /// True when `pid` has not been seen within the timeout.
     pub fn is_frozen(&self, pid: u32, telemetry: &telemetry::Telemetry) -> Result<bool> {
-        let now = core::now_unix_millis();
+        let now = shared::now_unix_millis();
         let frozen = match self.last_seen.get(&pid) {
             Some(seen) => now - seen > self.timeout_secs * 1000,
             None => false,

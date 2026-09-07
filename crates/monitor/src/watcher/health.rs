@@ -1,6 +1,6 @@
 //! Health check via liveness probe.
 
-use core::Result;
+use shared::Result;
 use serde::{Deserialize, Serialize};
 
 use super::process::is_running;

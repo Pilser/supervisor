@@ -1,6 +1,6 @@
 //! Prepare-for-shutdown command.
 
-use core::Result;
+use shared::Result;
 
 use crate::executor::result::CommandResult;
 

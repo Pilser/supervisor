@@ -1,6 +1,6 @@
 //! Detect memory leaks via monotonic RSS growth.
 
-use core::Result;
+use shared::Result;
 use serde::{Deserialize, Serialize};
 
 /// Flags a leak when consecutive samples keep growing past a threshold.

@@ -1,6 +1,6 @@
 //! Escalate to the wrapper when local recovery fails.
 
-use core::Result;
+use shared::Result;
 use serde::{Deserialize, Serialize};
 
 /// Escalation notice queued for the wrapper.
@@ -20,7 +20,7 @@ pub fn escalate_to_wrapper(
     let escalation = Escalation {
         program: program.to_string(),
         reason: reason.to_string(),
-        at_unix_millis: core::now_unix_millis(),
+        at_unix_millis: shared::now_unix_millis(),
     };
     telemetry
         .builder()

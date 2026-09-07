@@ -1,6 +1,6 @@
 //! Restart a crashed process.
 
-use core::Result;
+use shared::Result;
 
 use crate::programs::ProgramSpec;
 
@@ -16,7 +16,7 @@ pub async fn restart_program(spec: &ProgramSpec, telemetry: &telemetry::Telemetr
     let mut cmd = tokio::process::Command::new(&spec.binary);
     cmd.args(&spec.args);
     cmd.spawn().map_err(|e| {
-        core::SupervisorError::Monitor(format!("failed to restart {}: {e}", spec.name))
+        shared::SupervisorError::Monitor(format!("failed to restart {}: {e}", spec.name))
     })?;
     telemetry
         .builder()

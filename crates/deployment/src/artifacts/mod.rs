@@ -8,5 +8,5 @@ pub mod config;
 pub mod manifest;
 pub mod plugin;
 
-pub use core::{DeploymentArtifact, DeploymentManifest};
+pub use shared::{DeploymentArtifact, DeploymentManifest};
 pub use manifest::parse_manifest;

@@ -2,7 +2,7 @@
 
 use std::collections::HashMap;
 
-use core::{Result, SupervisorError};
+use shared::{Result, SupervisorError};
 use serde::{Deserialize, Serialize};
 
 /// How to launch and supervise one program.

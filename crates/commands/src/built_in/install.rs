@@ -1,6 +1,6 @@
 //! Install plugin/tool command.
 
-use core::Result;
+use shared::Result;
 
 use crate::executor::result::CommandResult;
 

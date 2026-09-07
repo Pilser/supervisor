@@ -42,7 +42,7 @@ impl SupervisorContextBuilder {
         self
     }
 
-    pub fn build(self) -> core::Result<SupervisorContext> {
+    pub fn build(self) -> shared::Result<SupervisorContext> {
         Ok(SupervisorContext {
             vm_id: self.vm_id.unwrap_or_else(|| "vm_001".to_string()),
             tenant_id: self.tenant_id.unwrap_or_default(),

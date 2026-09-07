@@ -1,6 +1,6 @@
 //! Command timeout handling.
 
-use core::{Result, SupervisorError};
+use shared::{Result, SupervisorError};
 
 /// Run `fut` with a timeout; expiry maps to [`SupervisorError::Timeout`].
 pub async fn run_with_timeout<T>(

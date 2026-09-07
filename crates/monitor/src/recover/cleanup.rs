@@ -1,6 +1,6 @@
 //! Cleanup after a crash (stale sockets, temp files).
 
-use core::Result;
+use shared::Result;
 
 /// Remove stale runtime state left behind by `name`.
 pub fn cleanup_after_crash(name: &str, telemetry: &telemetry::Telemetry) -> Result<()> {

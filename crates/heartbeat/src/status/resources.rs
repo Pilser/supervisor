@@ -1,6 +1,6 @@
 //! CPU/memory section of the heartbeat.
 
-use core::Result;
+use shared::Result;
 
 /// Host-wide CPU and memory snapshot as JSON.
 pub fn resources_status(telemetry: &telemetry::Telemetry) -> Result<serde_json::Value> {

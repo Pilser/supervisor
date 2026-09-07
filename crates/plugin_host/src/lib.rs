@@ -6,7 +6,7 @@
 //! inter-plugin API registry.
 //!
 //! This crate is deliberately a subset of the wrapper plugin host, scoped to
-//! the supervisor `core::Plugin` contract and `core::HookPoint` variants.
+//! the supervisor `shared::Plugin` contract and `shared::HookPoint` variants.
 
 pub mod api;
 pub mod hooks;
@@ -22,7 +22,7 @@ use std::sync::{Arc, Mutex};
 use libloading::Library;
 use telemetry::{Level, Telemetry};
 
-pub use core::{
+pub use shared::{
     HookPoint, Plugin, PluginApi, PluginContext, PluginInfo, PluginType, PluginVersion, Result,
     SupervisorError, SupervisorErrorKind,
 };
@@ -56,7 +56,7 @@ pub struct PluginHost {
     pub folder: PathBuf,
     /// Name → loaded plugin map.
     pub registry: Mutex<HashMap<String, HandledPlugin>>,
-    /// Central hook dispatcher, scoped to `core::HookPoint`.
+    /// Central hook dispatcher, scoped to `shared::HookPoint`.
     pub dispatcher: HookDispatcher,
 }
 

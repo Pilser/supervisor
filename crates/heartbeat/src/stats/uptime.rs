@@ -11,7 +11,7 @@ pub struct UptimeTracker {
 impl Default for UptimeTracker {
     fn default() -> Self {
         Self {
-            boot_unix_millis: core::now_unix_millis(),
+            boot_unix_millis: shared::now_unix_millis(),
         }
     }
 }
@@ -22,6 +22,6 @@ impl UptimeTracker {
     }
 
     pub fn uptime_secs(&self) -> u64 {
-        core::now_unix_millis().saturating_sub(self.boot_unix_millis) / 1000
+        shared::now_unix_millis().saturating_sub(self.boot_unix_millis) / 1000
     }
 }
