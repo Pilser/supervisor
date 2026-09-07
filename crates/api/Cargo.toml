@@ -1,0 +1,25 @@
+[package]
+name = "api"
+version = "0.1.0"
+edition = "2024"
+
+[lib]
+name = "api"
+path = "src/lib.rs"
+
+[dependencies]
+core = { path = "../core" }
+telemetry = { path = "../telemetry" }
+proxy = { path = "../proxy" }
+mcp = { path = "../mcp" }
+monitor = { path = "../monitor" }
+heartbeat = { path = "../heartbeat" }
+commands = { path = "../commands" }
+deployment = { path = "../deployment" }
+plugin_host = { path = "../plugin_host" }
+serde = { workspace = true }
+serde_json = { workspace = true }
+uuid = { workspace = true }
+anyhow = { workspace = true }
+tokio = { workspace = true }
+reqwest = { workspace = true }

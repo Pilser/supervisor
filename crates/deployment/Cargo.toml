@@ -1,0 +1,21 @@
+[package]
+name = "deployment"
+version = "0.1.0"
+edition = "2024"
+
+[lib]
+name = "deployment"
+path = "src/lib.rs"
+
+[dependencies]
+core = { path = "../core" }
+telemetry = { path = "../telemetry" }
+proxy = { path = "../proxy" }
+commands = { path = "../commands" }
+plugin_host = { path = "../plugin_host" }
+serde = { workspace = true }
+serde_json = { workspace = true }
+uuid = { workspace = true }
+anyhow = { workspace = true }
+tokio = { workspace = true }
+reqwest = { workspace = true }

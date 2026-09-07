@@ -1,0 +1,939 @@
+SUPERVISOR ARCHITECTURE
+Agent Protocol, Wrapper Proxy, Category-Based Deployment, Telemetry
+=====================================================================
+
+
+OVERVIEW
+--------
+
+The supervisor is a Rust-based daemon that runs inside every Firecracker VM.
+It has five roles:
+
+1. MONITOR — watches the agent and memory binaries, restarts them if they crash
+2. MCP SERVER — exposes tools to the agent so it can store/fetch tenant data
+3. PROXY — forwards agent data requests to the wrapper, which owns the databases
+4. DEPLOYMENT AGENT — receives plugins, configs, files, and commands from the
+   wrapper based on the tenant's category
+5. TELEMETRY — tracks every event, error, and latency inside the VM, writes
+   daily JSON files locally, and forwards telemetry to the wrapper
+
+The supervisor does NOT own any data. It is a protocol layer. When the agent
+asks to save a memory, the supervisor asks the wrapper to save it. The wrapper
+validates the tenant ID, opens the correct tenant DB, and performs the write.
+Telemetry is collected locally and also forwarded to the wrapper for central
+monitoring.
+
+
+COMMUNICATION FLOW
+------------------
+
+[Browser/Client]
+       |
+       | (websocket through wrapper proxy)
+       v
+[Wrapper] ──────────────────────────────────────────┐
+       |                                              |
+       | (agent protocol over virtio-net)             | (data request + deployment)
+       v                                              |
+[Supervisor inside VM] ──────────────────────────────┘
+       |
+       | (local IPC — unix socket or shared memory)
+       v
+[Agent inside VM]
+
+Flow when agent wants to save memory:
+  1. Agent calls supervisor tool: save_memory(key, value, category)
+  2. Supervisor packages request with tenant_id
+  3. Supervisor sends to wrapper over network
+  4. Wrapper validates tenant_id matches this VM
+  5. Wrapper writes to tenant DB
+  6. Wrapper sends response back to supervisor
+  7. Supervisor returns result to agent
+
+The agent never talks to the wrapper directly. The supervisor is the gateway.
+
+
+WORKSPACE STRUCTURE
+-------------------
+
+supervisor/
+├── Cargo.toml
+├── crates/
+│   ├── core/
+│   ├── mcp/
+│   ├── proxy/
+│   ├── monitor/
+│   ├── heartbeat/
+│   ├── commands/
+│   ├── deployment/      (receive plugins, configs, files from wrapper)
+│   ├── telemetry/       (structured logging, metrics, forward to wrapper)
+│   ├── plugin_host/
+│   └── api/
+├── src/
+└── config.toml
+
+
+================================================================================
+CRATE: core
+================================================================================
+
+crates/core/
+├── Cargo.toml
+└── src/
+    ├── lib.rs               (re-exports all modules)
+    ├── types/
+    │   ├── mod.rs
+    │   ├── tenant.rs        (TenantContext — current tenant this VM serves)
+    │   ├── agent.rs         (AgentInfo — agent process state)
+    │   ├── memory.rs        (MemoryEntry, MemoryCategory, MemoryQuery)
+    │   ├── history.rs       (HistoryEntry, HistoryAction)
+    │   ├── project.rs       (Project, ProjectStatus, ProjectDomain)
+    │   ├── skill.rs         (Skill, SkillLevel, SkillDomain)
+    │   ├── report.rs        (Report, ReportPeriod)
+    │   ├── category.rs      (CategoryInfo — tenant's category, affects deployment)
+    │   └── deployment.rs    (DeploymentArtifact, DeploymentManifest)
+    ├── plugin/
+    │   ├── mod.rs
+    │   ├── trait.rs         (Plugin trait)
+    │   ├── info.rs          (PluginInfo)
+    │   ├── context.rs       (PluginContext)
+    │   ├── hooks.rs         (HookPoint enum)
+    │   └── api.rs           (PluginApi)
+    ├── error/
+    │   ├── mod.rs
+    │   └── supervisor_error.rs
+    └── util/
+        ├── mod.rs
+        ├── time.rs
+        ├── fs.rs
+        └── validation.rs
+
+Plugin Interface:
+  - Plugin trait, PluginContext, HookPoint, PluginApi
+  - CategoryInfo — plugins can read tenant's category
+  - Deployment types — plugins can hook into deployment pipeline
+
+
+================================================================================
+CRATE: mcp
+================================================================================
+Exposes tools to the agent using MCP (Model Context Protocol) or similar.
+
+crates/mcp/
+├── Cargo.toml
+└── src/
+    ├── lib.rs               (re-exports all modules)
+    ├── server/
+    │   ├── mod.rs
+    │   ├── tcp.rs           (TCP listener for agent connections)
+    │   ├── unix.rs          (Unix socket listener)
+    │   ├── handshake.rs     (protocol handshake with agent)
+    │   └── shutdown.rs      (graceful server shutdown)
+    ├── protocol/
+    │   ├── mod.rs
+    │   ├── message.rs       (request/response message format)
+    │   ├── json_rpc.rs      (JSON-RPC 2.0 implementation)
+    │   ├── encode.rs        (serialization)
+    │   └── decode.rs        (deserialization)
+    ├── tools/
+    │   ├── mod.rs
+    │   ├── registry.rs      (ToolRegistry — register, list, call tools)
+    │   ├── builder.rs       (ToolBuilder — define tool with params)
+    │   ├── handler.rs       (ToolHandler trait — implement tool logic)
+    │   └── validate.rs      (validate tool parameters before calling)
+    ├── built_in/
+    │   ├── mod.rs
+    │   ├── memory.rs        (tools: save_memory, get_memory, list_memory, search_memory)
+    │   ├── profile.rs       (tools: get_profile, update_profile)
+    │   ├── history.rs       (tools: log_history, get_history)
+    │   ├── projects.rs      (tools: create_project, update_project, list_projects)
+    │   ├── skills.rs        (tools: add_skill, update_skill, list_skills)
+    │   ├── reports.rs       (tools: get_report, list_reports)
+    │   ├── configs.rs       (tools: get_config, set_config)
+    │   └── tenant.rs        (tools: get_tenant_info, get_category_info)
+    ├── handler/
+    │   ├── mod.rs
+    │   ├── memory.rs        (handlers that proxy memory requests to wrapper)
+    │   ├── profile.rs       (handlers that proxy profile requests to wrapper)
+    │   ├── history.rs       (handlers that proxy history requests to wrapper)
+    │   ├── projects.rs      (handlers that proxy project requests to wrapper)
+    │   ├── skills.rs        (handlers that proxy skill requests to wrapper)
+    │   ├── reports.rs       (handlers that proxy report requests to wrapper)
+    │   ├── configs.rs       (handlers that proxy config requests to wrapper)
+    │   └── tenant.rs        (handlers that proxy tenant/category requests to wrapper)
+    └── permissions/
+        ├── mod.rs
+        ├── scope.rs          (what tools the agent can access)
+        └── enforce.rs        (enforce tool access permissions)
+
+Plugin API:
+  - ToolRegistry: register new tools the agent can call
+  - ToolBuilder: define tool name, description, parameters, handler
+  - Built-in tool handlers: subscribe to tool call events
+  - Permissions: add custom tool access policies
+  - Hooks: OnToolRegistered, OnToolCalled, OnToolResponse, OnAgentConnected,
+           OnAgentDisconnected, OnToolError
+  - Plugins can add entirely new tool categories
+  - Plugins can wrap existing tools with middleware (logging, validation)
+  - Plugins can restrict or extend what the agent can do
+
+
+================================================================================
+CRATE: proxy
+================================================================================
+Forwards data requests from supervisor to the wrapper.
+
+crates/proxy/
+├── Cargo.toml
+└── src/
+    ├── lib.rs               (re-exports all modules)
+    ├── client/
+    │   ├── mod.rs
+    │   ├── connect.rs       (establish connection to wrapper)
+    │   ├── pool.rs          (connection pool to wrapper)
+    │   ├── retry.rs         (retry failed requests)
+    │   └── tls.rs           (TLS connection to wrapper if needed)
+    ├── request/
+    │   ├── mod.rs
+    │   ├── builder.rs       (build request to wrapper)
+    │   ├── types.rs         (request types: db_read, db_write, heartbeat, deployment)
+    │   ├── tenant.rs        (attach tenant_id to every request)
+    │   └── sign.rs          (sign requests for authentication)
+    ├── response/
+    │   ├── mod.rs
+    │   ├── parse.rs         (parse wrapper response)
+    │   ├── error.rs         (handle wrapper error responses)
+    │   └── transform.rs     (transform response for supervisor use)
+    ├── cache/
+    │   ├── mod.rs
+    │   ├── store.rs         (local cache to reduce wrapper calls)
+    │   ├── invalidate.rs    (cache invalidation on writes)
+    │   └── ttl.rs           (cache time-to-live management)
+    ├── queue/
+    │   ├── mod.rs
+    │   ├── offline.rs       (queue requests if wrapper unreachable)
+    │   ├── flush.rs         (flush queued requests when reconnected)
+    │   └── priority.rs      (prioritize critical requests)
+    └── auth/
+        ├── mod.rs
+        ├── token.rs         (authenticate with wrapper)
+        ├── refresh.rs       (refresh auth token)
+        └── rotate.rs        (handle token rotation)
+
+Plugin API:
+  - ProxyClient: send custom request types to wrapper
+  - RequestBuilder: define custom request payloads
+  - CacheStore: add custom caching strategies
+  - OfflineQueue: customize offline behavior
+  - Hooks: OnRequestToWrapper, OnResponseFromWrapper, OnWrapperUnreachable,
+           OnWrapperReconnected, OnRequestQueued, OnCacheHit, OnCacheMiss
+  - Plugins can add custom request/response types
+  - Plugins can implement custom caching logic
+  - Plugins can add request/response transformation middleware
+
+
+================================================================================
+CRATE: monitor
+================================================================================
+Watches the agent and memory binaries inside the VM.
+
+crates/monitor/
+├── Cargo.toml
+└── src/
+    ├── lib.rs               (re-exports all modules)
+    ├── watcher/
+    │   ├── mod.rs
+    │   ├── process.rs       (watch process by PID)
+    │   ├── health.rs        (health check via ping/response)
+    │   ├── resources.rs     (watch CPU, memory usage)
+    │   └── schedule.rs      (monitoring interval schedule)
+    ├── detect/
+    │   ├── mod.rs
+    │   ├── crash.rs         (detect process exit)
+    │   ├── freeze.rs        (detect unresponsive process)
+    │   ├── leak.rs          (detect memory leak)
+    │   └── zombie.rs        (detect zombie processes)
+    ├── recover/
+    │   ├── mod.rs
+    │   ├── restart.rs       (restart crashed process)
+    │   ├── kill.rs          (kill frozen process)
+    │   ├── cleanup.rs       (cleanup after crash)
+    │   └── escalate.rs      (escalate to wrapper if recovery fails)
+    ├── programs/
+    │   ├── mod.rs
+    │   ├── registry.rs      (register programs to monitor)
+    │   ├── agent.rs         (agent-specific monitoring config)
+    │   ├── memory.rs        (memory binary monitoring config)
+    │   └── custom.rs        (add custom programs to monitor)
+    └── report/
+        ├── mod.rs
+        ├── status.rs        (current status of all monitored programs)
+        ├── events.rs        (monitoring events log)
+        └── stats.rs         (uptime, restart count, crash count)
+
+Plugin API:
+  - ProgramRegistry: register custom programs to monitor
+  - HealthChecker: add custom health check logic
+  - CrashDetector: add custom crash/freeze detection
+  - RecoveryStrategy: define custom recovery actions
+  - Hooks: OnProcessCrashed, OnProcessFrozen, OnProcessRestarted,
+           OnResourceThresholdExceeded, OnHealthCheckFailed,
+           OnRecoveryStarted, OnRecoveryFailed
+  - Plugins can add custom monitoring metrics
+  - Plugins can define custom recovery workflows
+  - Plugins can escalate events to external systems
+
+
+================================================================================
+CRATE: heartbeat
+================================================================================
+Sends heartbeats to the wrapper so it knows this VM is alive.
+
+crates/heartbeat/
+├── Cargo.toml
+└── src/
+    ├── lib.rs               (re-exports all modules)
+    ├── sender/
+    │   ├── mod.rs
+    │   ├── interval.rs      (heartbeat interval configuration)
+    │   ├── payload.rs       (build heartbeat payload)
+    │   └── send.rs          (send heartbeat to wrapper)
+    ├── status/
+    │   ├── mod.rs
+    │   ├── programs.rs      (include program status in heartbeat)
+    │   ├── resources.rs     (include CPU/memory in heartbeat)
+    │   └── custom.rs        (add custom status fields)
+    ├── failure/
+    │   ├── mod.rs
+    │   ├── detect.rs        (detect heartbeat send failure)
+    │   ├── retry.rs         (retry failed heartbeats)
+    │   └── offline.rs       (switch to offline mode)
+    └── stats/
+        ├── mod.rs
+        ├── uptime.rs        (track VM uptime)
+        ├── latency.rs       (track round-trip latency)
+        └── history.rs       (heartbeat history)
+
+Plugin API:
+  - HeartbeatSender: customize heartbeat payload and interval
+  - StatusReporter: add custom status fields to heartbeat
+  - FailureHandler: define custom failure handling
+  - Hooks: OnHeartbeatSent, OnHeartbeatFailed, OnHeartbeatRecovered,
+           OnOfflineMode, OnOnlineMode
+  - Plugins can add custom health metrics to heartbeat
+  - Plugins can trigger actions based on heartbeat failures
+
+
+================================================================================
+CRATE: commands
+================================================================================
+Receives and executes commands from the wrapper.
+
+crates/commands/
+├── Cargo.toml
+└── src/
+    ├── lib.rs               (re-exports all modules)
+    ├── listener/
+    │   ├── mod.rs
+    │   ├── tcp.rs           (listen for commands from wrapper)
+    │   ├── authenticate.rs  (verify command comes from wrapper)
+    │   └── parse.rs         (parse incoming command)
+    ├── executor/
+    │   ├── mod.rs
+    │   ├── run.rs           (execute a command)
+    │   ├── timeout.rs       (command timeout handling)
+    │   └── result.rs        (build command result)
+    ├── built_in/
+    │   ├── mod.rs
+    │   ├── install.rs       (install plugin/tool command)
+    │   ├── configure.rs     (update config file command)
+    │   ├── restart.rs       (restart a program command)
+    │   ├── shutdown.rs      (prepare for shutdown command)
+    │   ├── update.rs        (update binary command)
+    │   ├── run_script.rs    (execute arbitrary script/command)
+    │   └── status.rs        (report status command)
+    ├── queue/
+    │   ├── mod.rs
+    │   ├── store.rs         (queue commands if busy)
+    │   ├── priority.rs      (prioritize commands)
+    │   └── cancel.rs        (cancel queued commands)
+    └── response/
+        ├── mod.rs
+        ├── success.rs       (send success response)
+        ├── failure.rs       (send failure response)
+        └── progress.rs      (send progress for long commands)
+
+Plugin API:
+  - CommandRegistry: register custom commands the wrapper can send
+  - CommandExecutor: define custom command execution logic
+  - CommandQueue: customize command queuing behavior
+  - Hooks: OnCommandReceived, OnCommandExecuted, OnCommandFailed,
+           OnCommandTimeout, OnCommandQueued
+  - Plugins can add new commands the wrapper can call
+  - Plugins can wrap commands with middleware (logging, validation)
+  - Plugins can add command authorization logic
+
+
+================================================================================
+CRATE: deployment
+================================================================================
+Receives plugins, config files, binaries, and commands from the wrapper
+based on the tenant's category.
+
+crates/deployment/
+├── Cargo.toml
+└── src/
+    ├── lib.rs               (re-exports all modules)
+    ├── receiver/
+    │   ├── mod.rs
+    │   ├── listen.rs        (listen for deployment pushes from wrapper)
+    │   ├── accept.rs        (accept incoming deployment)
+    │   ├── stream.rs        (receive large file streams)
+    │   └── verify.rs        (verify checksums, signatures)
+    ├── artifacts/
+    │   ├── mod.rs
+    │   ├── plugin.rs        (handle .so plugin files — supervisor plugins)
+    │   ├── agent_plugin.rs  (handle agent plugin files)
+    │   ├── config.rs        (handle config files for programs)
+    │   ├── binary.rs        (handle additional binary files)
+    │   ├── command.rs       (handle command/script files)
+    │   └── manifest.rs      (parse deployment manifest from wrapper)
+    ├── install/
+    │   ├── mod.rs
+    │   ├── plugin.rs        (install supervisor plugins, hot-reload)
+    │   ├── agent_plugin.rs  (install agent plugins/tools)
+    │   ├── config.rs        (place config files in correct locations)
+    │   ├── binary.rs        (install binaries, set permissions)
+    │   └── command.rs       (execute post-deployment commands)
+    ├── category/
+    │   ├── mod.rs
+    │   ├── detect.rs        (detect current category)
+    │   ├── request.rs       (request category-specific deployment from wrapper)
+    │   └── change.rs        (handle category change: re-deploy everything)
+    ├── rollback/
+    │   ├── mod.rs
+    │   ├── snapshot.rs      (snapshot current state before deployment)
+    │   ├── revert.rs        (revert to previous state on failure)
+    │   └── cleanup.rs       (cleanup failed deployment artifacts)
+    └── report/
+        ├── mod.rs
+        ├── status.rs        (report deployment status to wrapper)
+        └── history.rs       (deployment history log)
+
+Plugin API:
+  - ArtifactHandler: register custom artifact type handlers
+  - Installer: define custom installation logic
+  - CategoryDetector: hook into category detection
+  - RollbackManager: customize rollback behavior
+  - Hooks: OnDeploymentReceived, OnDeploymentStarted, OnDeploymentCompleted,
+           OnDeploymentFailed, OnPluginInstalled, OnConfigUpdated,
+           OnBinaryInstalled, OnCommandExecuted, OnCategoryChanged,
+           OnRollbackStarted
+  - Plugins can register custom artifact types
+  - Plugins can customize installation procedures
+  - Plugins can add post-deployment validation
+
+
+================================================================================
+CRATE: telemetry
+================================================================================
+
+crates/telemetry/
+├── Cargo.toml
+└── src/
+    ├── lib.rs
+    ├── config/
+    │   ├── mod.rs
+    │   ├── settings.rs
+    │   └── load.rs
+    ├── event/
+    │   ├── mod.rs
+    │   ├── builder.rs
+    │   ├── emit.rs
+    │   ├── types.rs
+    │   └── level.rs
+    ├── models/
+    │   ├── mod.rs
+    │   ├── event.rs
+    │   ├── span.rs
+    │   ├── error.rs
+    │   ├── metric.rs
+    │   └── request.rs
+    ├── writer/
+    │   ├── mod.rs
+    │   ├── file.rs
+    │   ├── rotation.rs
+    │   ├── buffer.rs
+    │   └── flush.rs
+    ├── forward/
+    │   ├── mod.rs
+    │   ├── client.rs          (forward telemetry to wrapper)
+    │   ├── batch.rs           (batch events before sending)
+    │   ├── retry.rs           (retry failed forwards)
+    │   └── compress.rs        (compress before sending)
+    ├── metrics/
+    │   ├── mod.rs
+    │   ├── latency.rs
+    │   ├── counter.rs
+    │   ├── gauge.rs
+    │   └── histogram.rs
+    └── macros/
+        ├── mod.rs
+        ├── event.rs
+        ├── span.rs
+        └── timing.rs
+
+Plugin API:
+  - EventBuilder: create custom event types
+  - emit(): emit custom events from plugins
+  - FileWriter: configure local file output
+  - ForwardClient: configure forwarding to wrapper
+  - Metrics: register custom metrics
+  - Hooks: OnEventEmitted, OnFileFlushed, OnForwardSent, OnMetricRecorded
+  - Plugins can emit custom telemetry events
+  - Plugins can register custom metrics
+  - Plugins can subscribe to telemetry streams
+
+Telemetry in the supervisor works the same as the wrapper but with two
+differences:
+  1. Events are written to local disk inside the VM (daily JSON files)
+  2. Events are also forwarded to the wrapper for central monitoring
+
+Config:
+  [telemetry]
+  enabled = true
+  output = "both"                    # "disk", "forward", "both", "none"
+
+  [telemetry.disk]
+  path = "/var/log/supervisor/telemetry"
+  filename_pattern = "telemetry_{date}.json"
+  buffer_size = 500
+  flush_interval_seconds = 5
+  retention_days = 7                 # shorter retention inside VM
+
+  [telemetry.forward]
+  wrapper_address = "172.16.0.1"
+  wrapper_port = 9090
+  batch_size = 50
+  flush_interval_seconds = 10
+  retry_attempts = 3
+  compress = true
+
+================================================================================
+CRATE: plugin_host
+================================================================================
+
+crates/plugin_host/
+├── Cargo.toml
+└── src/
+    ├── lib.rs               (re-exports all modules)
+    ├── loader/
+    │   ├── mod.rs
+    │   ├── load.rs
+    │   ├── unload.rs
+    │   ├── symbols.rs
+    │   └── validate.rs
+    ├── watcher/
+    │   ├── mod.rs
+    │   ├── folder.rs
+    │   ├── event.rs
+    │   └── scan.rs
+    ├── registry/
+    │   ├── mod.rs
+    │   ├── store.rs
+    │   ├── lookup.rs
+    │   └── dependency.rs
+    ├── hooks/
+    │   ├── mod.rs
+    │   ├── dispatch.rs
+    │   └── priority.rs
+    ├── api/
+    │   ├── mod.rs
+    │   ├── register.rs
+    │   ├── lookup.rs
+    │   └── call.rs
+    └── lifecycle/
+        ├── mod.rs
+        ├── init.rs
+        ├── shutdown.rs
+        └── reload.rs
+
+Plugin API:
+  - PluginLoader, FolderWatcher, PluginRegistry, HookDispatcher
+  - PluginApiRegistry: inter-plugin APIs
+  - Hooks: OnPluginLoaded, OnPluginUnloaded, OnPluginReloaded, OnPluginError
+
+
+================================================================================
+CRATE: api
+================================================================================
+
+crates/api/
+├── Cargo.toml
+└── src/
+    ├── lib.rs
+    ├── context/
+    │   ├── mod.rs
+    │   ├── builder.rs
+    │   └── access.rs
+    ├── mcp.rs
+    ├── proxy.rs
+    ├── monitor.rs
+    ├── heartbeat.rs
+    ├── commands.rs
+    ├── deployment.rs          (re-export deployment handles)
+    ├── plugin.rs
+    ├── events/
+    │   ├── mod.rs
+    │   ├── emit.rs
+    │   └── subscribe.rs
+    └── macros/
+        ├── mod.rs
+        └── export.rs
+
+
+================================================================================
+MAIN BINARY (src/)
+================================================================================
+
+src/
+├── main.rs
+├── config/
+│   ├── mod.rs
+│   ├── load.rs
+│   └── validate.rs
+└── logging/
+    ├── mod.rs
+    └── init.rs
+
+
+================================================================================
+HOW THE AGENT TALKS TO THE SUPERVISOR
+================================================================================
+
+The supervisor exposes an MCP-compatible server inside the VM on a Unix
+socket at /tmp/supervisor.sock.
+
+Agent connects and calls tools:
+
+  Agent → supervisor: {
+    "jsonrpc": "2.0",
+    "method": "tools/call",
+    "params": {
+      "name": "save_memory",
+      "arguments": {
+        "key": "favorite_color",
+        "value": "blue",
+        "category": "preference",
+        "importance": 0.8
+      }
+    }
+  }
+
+  Supervisor → wrapper: {
+    "type": "db_write",
+    "tenant_id": "abc-123",
+    "operation": "memory.insert",
+    "data": {
+      "key": "favorite_color",
+      "value": "blue",
+      "category": "preference",
+      "importance": 0.8
+    }
+  }
+
+  Wrapper → supervisor: {
+    "status": "ok",
+    "data": { "id": "mem_001" }
+  }
+
+  Supervisor → agent: {
+    "jsonrpc": "2.0",
+    "result": {
+      "content": [{ "type": "text", "text": "Memory saved" }]
+    }
+  }
+
+
+================================================================================
+CATEGORY-BASED DEPLOYMENT TO SUPERVISOR
+================================================================================
+
+When a tenant is assigned to a category, the wrapper pushes a deployment
+package to the supervisor. The supervisor receives and installs everything.
+
+Deployment package from wrapper:
+
+  {
+    "tenant_id": "abc-123",
+    "category": "robotics",
+    "artifacts": [
+      {
+        "type": "supervisor_plugin",
+        "name": "robotics_monitor.so",
+        "path": "/usr/local/lib/supervisor/plugins/robotics_monitor.so",
+        "checksum": "sha256:abc123..."
+      },
+      {
+        "type": "agent_plugin",
+        "name": "robotics_guide.so",
+        "path": "/usr/local/lib/agent/plugins/robotics_guide.so",
+        "checksum": "sha256:def456..."
+      },
+      {
+        "type": "config",
+        "name": "agent_robotics.conf",
+        "path": "/etc/agent/agent.conf",
+        "checksum": "sha256:ghi789..."
+      },
+      {
+        "type": "binary",
+        "name": "simulator",
+        "path": "/usr/local/bin/simulator",
+        "checksum": "sha256:jkl012..."
+      },
+      {
+        "type": "command",
+        "name": "initialize_ros.sh",
+        "path": "/tmp/init.sh",
+        "run_after_install": true,
+        "checksum": "sha256:mno345..."
+      }
+    ]
+  }
+
+Supervisor processes each artifact:
+  1. Verify checksum
+  2. Place file at correct path
+  3. Set permissions (binaries get +x)
+  4. Install supervisor plugins via plugin_host (hot-reload)
+  5. Execute run_after_install commands
+  6. Report success/failure back to wrapper
+
+If anything fails, supervisor reports failure and rolls back to previous state.
+
+
+================================================================================
+DATA FLOW FOR ALL OPERATIONS
+================================================================================
+
+AGENT REQUEST (save_memory, get_profile, log_history, etc.)
+       |
+       v
+[MCP Server] — receives tool call from agent
+       |
+       v
+[Handler] — validates request, attaches tenant_id
+       |
+       v
+[Proxy Client] — sends to wrapper over network
+       |
+       v
+[Wrapper] — validates tenant, performs DB operation
+       |
+       v
+[Proxy Client] — receives response
+       |
+       v
+[Handler] — transforms response for agent
+       |
+       v
+[MCP Server] — returns result to agent
+
+DEPLOYMENT (from wrapper)
+       |
+       v
+[Deployment Receiver] — accepts deployment package
+       |
+       v
+[Verifier] — checks checksums, signatures
+       |
+       v
+[Installer] — places files, installs plugins, runs commands
+       |
+       v
+[Reporter] — reports success/failure to wrapper
+
+
+================================================================================
+BUILT-IN MCP TOOLS (exposed to agent)
+================================================================================
+
+Memory Tools:
+  save_memory(key, value, category, importance)
+  get_memory(key)
+  list_memory(category?, limit?)
+  search_memory(query, category?)
+  delete_memory(key)
+
+Profile Tools:
+  get_profile()
+  update_profile(field, value)
+
+History Tools:
+  log_history(action, domain, summary, duration)
+  get_history(limit?, domain?, since?)
+
+Project Tools:
+  create_project(name, domain, description)
+  update_project(project_id, field, value)
+  list_projects(status?)
+  get_project(project_id)
+
+Skill Tools:
+  add_skill(name, domain, level, confidence)
+  update_skill(skill_id, field, value)
+  list_skills(domain?)
+  get_skill(skill_id)
+
+Report Tools:
+  get_report(report_id)
+  list_reports(since?, until?)
+
+Config Tools:
+  get_config(key)
+  set_config(key, value)
+
+Tenant Tools:
+  get_tenant_info()
+  get_category_info()
+
+
+================================================================================
+HOOK POINTS
+================================================================================
+
+OnAgentConnected
+OnAgentDisconnected
+OnToolRegistered
+OnToolCalled
+OnToolResponse
+OnToolError
+OnProcessCrashed
+OnProcessFrozen
+OnProcessRestarted
+OnResourceThresholdExceeded
+OnHealthCheckFailed
+OnRecoveryStarted
+OnRecoveryFailed
+OnHeartbeatSent
+OnHeartbeatFailed
+OnHeartbeatRecovered
+OnOfflineMode
+OnOnlineMode
+OnWrapperUnreachable
+OnWrapperReconnected
+OnRequestToWrapper
+OnResponseFromWrapper
+OnRequestQueued
+OnCacheHit
+OnCacheMiss
+OnCommandReceived
+OnCommandExecuted
+OnCommandFailed
+OnCommandTimeout
+OnDeploymentReceived
+OnDeploymentStarted
+OnDeploymentCompleted
+OnDeploymentFailed
+OnPluginInstalled
+OnConfigUpdated
+OnBinaryInstalled
+OnCommandExecuted
+OnCategoryChanged
+OnRollbackStarted
+OnPluginLoaded
+OnPluginUnloaded
+OnPluginReloaded
+OnPluginError
+
+
+================================================================================
+STARTUP FLOW
+================================================================================
+
+1. Load config.toml
+2. Initialize telemetry
+3. Initialize logging
+4. Connect to wrapper, authenticate with tenant_id
+5. Request category-specific deployment from wrapper
+6. deployment::receive() — install plugins, configs, files, run commands
+7. monitor::init()              — register agent and memory binaries
+8. mcp::server::start()         — start MCP server on unix socket
+9. proxy::client::connect()     — establish connection to wrapper
+10. heartbeat::start()           → start sending heartbeats
+11. commands::listener::start()  → listen for commands from wrapper
+12. plugin_host::init()          → load all plugins from plugins/
+13. plugin_host::watcher::start() → watch plugins/ for changes
+14. telemetry::forward::start()  → start forwarding telemetry to wrapper
+15. monitor::start()            → begin watching agent and memory binaries
+16. Enter event loop            → run until shutdown command
+
+
+================================================================================
+CONFIGURATION (config.toml)
+================================================================================
+
+[supervisor]
+vm_id = "vm_001"
+tenant_id = "abc-123"
+
+[wrapper]
+address = "172.16.0.1"
+port = 9090
+auth_token = "secret_token_here"
+
+[mcp]
+socket_path = "/tmp/supervisor.sock"
+max_connections = 10
+
+[monitor]
+check_interval_seconds = 5
+freeze_timeout_seconds = 30
+auto_restart = true
+
+[heartbeat]
+interval_seconds = 5
+
+[commands]
+listen_port = 8090
+
+[deployment]
+plugins_dir = "/usr/local/lib/supervisor/plugins"
+agent_plugins_dir = "/usr/local/lib/agent/plugins"
+configs_dir = "/etc/agent"
+binaries_dir = "/usr/local/bin"
+temp_dir = "/tmp/deployments"
+
+[plugins]
+directory = "plugins"
+hot_reload = true
+
+[programs.agent]
+binary = "/usr/local/bin/agent"
+args = ["--mcp-socket", "/tmp/supervisor.sock"]
+restart_on_crash = true
+
+[programs.memory]
+binary = "/usr/local/bin/memory"
+args = ["--data-dir", "/data/memory"]
+restart_on_crash = true
+
+[telemetry]
+enabled = true
+output = "both"
+
+[telemetry.disk]
+path = "/var/log/supervisor/telemetry"
+filename_pattern = "telemetry_{date}.json"
+buffer_size = 500
+flush_interval_seconds = 5
+retention_days = 7
+
+[telemetry.forward]
+wrapper_address = "172.16.0.1"
+wrapper_port = 9090
+batch_size = 50
+flush_interval_seconds = 10
+retry_attempts = 3
+compress = true

@@ -1,0 +1,49 @@
+[package]
+name = "supervisor"
+version = "0.1.0"
+edition = "2024"
+
+[dependencies]
+api = { path = "crates/api" }
+supervisor_core = { path = "crates/core", package = "core" }
+telemetry = { path = "crates/telemetry" }
+tokio = { workspace = true }
+serde = { workspace = true }
+serde_json = { workspace = true }
+reqwest = { workspace = true }
+anyhow = { workspace = true }
+sysinfo = { workspace = true }
+toml = "0.8"
+
+[workspace]
+members = [
+    ".",
+    "crates/core",
+    "crates/telemetry",
+    "crates/proxy",
+    "crates/mcp",
+    "crates/monitor",
+    "crates/heartbeat",
+    "crates/commands",
+    "crates/deployment",
+    "crates/plugin_host",
+    "crates/api",
+]
+resolver = "2"
+
+[workspace.dependencies]
+anyhow = "1"
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+tokio = { version = "1", features = ["full"] }
+uuid = { version = "1", features = ["v4", "serde"] }
+chrono = { version = "0.4", features = ["serde", "clock"] }
+reqwest = { version = "0.12", default-features = false, features = ["json", "rustls-tls"] }
+hyper = { version = "1", features = ["full"] }
+hyper-util = { version = "0.1", features = ["full"] }
+http-body-util = "0.1"
+bytes = "1"
+futures-util = { version = "0.3", default-features = false, features = ["alloc", "async-await"] }
+tokio-tungstenite = "0.24"
+libloading = "0.8"
+sysinfo = "0.33"

@@ -1,0 +1,64 @@
+[supervisor]
+vm_id = "vm_001"
+tenant_id = "abc-123"
+
+[wrapper]
+address = "172.16.0.1"
+port = 9090
+auth_token = "secret_token_here"
+
+[mcp]
+socket_path = "/tmp/supervisor.sock"
+max_connections = 10
+
+[monitor]
+check_interval_seconds = 5
+freeze_timeout_seconds = 30
+auto_restart = true
+
+[heartbeat]
+interval_seconds = 5
+
+[commands]
+listen_port = 8090
+
+[deployment]
+plugins_dir = "/usr/local/lib/supervisor/plugins"
+agent_plugins_dir = "/usr/local/lib/agent/plugins"
+configs_dir = "/etc/agent"
+binaries_dir = "/usr/local/bin"
+temp_dir = "/tmp/deployments"
+port = 8091
+
+[plugins]
+directory = "plugins"
+hot_reload = true
+
+[programs.agent]
+binary = "/usr/local/bin/agent"
+args = ["--mcp-socket", "/tmp/supervisor.sock"]
+restart_on_crash = true
+
+[programs.memory]
+binary = "/usr/local/bin/memory"
+args = ["--data-dir", "/data/memory"]
+restart_on_crash = true
+
+[telemetry]
+enabled = true
+output = "both"
+
+[telemetry.disk]
+path = "/var/log/supervisor/telemetry"
+filename_pattern = "telemetry_{date}.json"
+buffer_size = 500
+flush_interval_seconds = 5
+retention_days = 7
+
+[telemetry.forward]
+wrapper_address = "172.16.0.1"
+wrapper_port = 9090
+batch_size = 50
+flush_interval_seconds = 10
+retry_attempts = 3
+compress = true
