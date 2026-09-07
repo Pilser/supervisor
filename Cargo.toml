@@ -47,3 +47,13 @@ futures-util = { version = "0.3", default-features = false, features = ["alloc",
 tokio-tungstenite = "0.24"
 libloading = "0.8"
 sysinfo = "0.33"
+[profile.release]
+opt-level = 3
+lto = "thin"
+codegen-units = 1
+strip = true
+debug = false
+
+[workspace.lints.clippy]
+all = "warn"
+pedantic = "warn"
