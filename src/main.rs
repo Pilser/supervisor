@@ -119,17 +119,40 @@ async fn main() -> anyhow::Result<()> {
         ))
         .emit();
 
-    // 7. monitor::init() — register agent and memory binaries.
-    let monitor_api = api::MonitorApi::new(cfg.monitor.check_interval_seconds);
+    // 7. monitor::init() — register agent, memory and zerowrapper binaries,
+    //    then launch them and start the health-check loop.
+    let mut registry = monitor::ProgramRegistry::new();
+    registry.register(
+        monitor::agent_spec(&cfg.programs.agent.binary),
+        &telemetry,
+    )?;
+    registry.register(
+        monitor::memory_spec(&cfg.programs.memory.binary),
+        &telemetry,
+    )?;
+    if let Some(ref zw) = cfg.programs.zerowrapper {
+        registry.register(
+            monitor::zerowrapper_spec(&zw.binary),
+            &telemetry,
+        )?;
+    }
+
+    let mut monitor_loop = monitor::MonitorLoop::new(registry);
+    if let Some(ref p) = cfg.monitor.agent_state_path {
+        monitor_loop = monitor_loop.with_agent_state_path(std::path::PathBuf::from(p));
+    }
+    // Launch all registered programs (agent, memory, zerowrapper).
+    monitor_loop.launch_all(&telemetry).await?;
     telemetry
         .builder()
         .level(telemetry::Level::Info)
         .kind("monitor.register")
         .category("monitor")
         .message(format!(
-            "monitor registered programs agent={} memory={} (interval={}s)",
+            "monitor launched agent={} memory={} zerowrapper={} (interval={}s)",
             cfg.programs.agent.binary,
             cfg.programs.memory.binary,
+            cfg.programs.zerowrapper.as_ref().map(|z| z.binary.as_str()).unwrap_or("none"),
             cfg.monitor.check_interval_seconds
         ))
         .emit();
@@ -234,14 +257,23 @@ async fn main() -> anyhow::Result<()> {
         ))
         .emit();
 
-    // 15. monitor::start() → begin watching agent and memory binaries.
-    let statuses = monitor_api.status();
+    // 15. monitor::start() → spawn the health-check loop. It polls every
+    //    check_interval_seconds, reads the agent state file, and restarts any
+    //    program that crashed (up to max_restarts before escalating).
+    let monitor_loop = std::sync::Arc::new(tokio::sync::Mutex::new(monitor_loop));
+    let (cancel_tx, cancel_rx) = tokio::sync::watch::channel(false);
+    let loop_handle = tokio::spawn(monitor::MonitorLoop::run(
+        monitor_loop,
+        cfg.monitor.check_interval_seconds,
+        telemetry.clone(),
+        cancel_rx,
+    ));
     telemetry
         .builder()
         .level(telemetry::Level::Info)
-        .kind("monitor.register")
+        .kind("monitor.start")
         .category("monitor")
-        .message(format!("monitor watching started ({} programs)", statuses.len()))
+        .message("monitor health-check loop started")
         .emit();
 
     let ctx = api::SupervisorContextBuilder::new()
@@ -256,6 +288,9 @@ async fn main() -> anyhow::Result<()> {
     // 16. Enter event loop → run until shutdown command.
     tokio::signal::ctrl_c().await?;
     println!("shutdown requested");
+    // Stop the monitor loop.
+    let _ = cancel_tx.send(true);
+    let _ = loop_handle.await;
     telemetry.flush().await;
     Ok(())
 }

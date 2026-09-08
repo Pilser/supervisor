@@ -44,6 +44,9 @@ pub struct MonitorSection {
     pub check_interval_seconds: u64,
     pub freeze_timeout_seconds: u64,
     pub auto_restart: bool,
+    /// Path to the agent's health state file (state/daemon_state.json).
+    #[serde(default)]
+    pub agent_state_path: Option<String>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -85,6 +88,8 @@ pub struct ProgramSection {
 pub struct ProgramsSection {
     pub agent: ProgramSection,
     pub memory: ProgramSection,
+    #[serde(default)]
+    pub zerowrapper: Option<ProgramSection>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]

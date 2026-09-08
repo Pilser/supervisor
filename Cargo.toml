@@ -5,6 +5,7 @@ edition = "2024"
 
 [dependencies]
 api = { path = "crates/api" }
+monitor = { path = "crates/monitor" }
 supervisor_core = { path = "crates/shared", package = "shared" }
 telemetry = { path = "crates/telemetry" }
 tokio = { workspace = true }

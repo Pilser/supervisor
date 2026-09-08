@@ -15,6 +15,7 @@ max_connections = 10
 check_interval_seconds = 5
 freeze_timeout_seconds = 30
 auto_restart = true
+agent_state_path = "data/daemon_state.json"
 
 [heartbeat]
 interval_seconds = 5
@@ -23,10 +24,10 @@ interval_seconds = 5
 listen_port = 8090
 
 [deployment]
-plugins_dir = "/usr/local/lib/supervisor/plugins"
-agent_plugins_dir = "/usr/local/lib/agent/plugins"
-configs_dir = "/etc/agent"
-binaries_dir = "/usr/local/bin"
+plugins_dir = "deployments/plugins"
+agent_plugins_dir = "deployments/agent_plugins"
+configs_dir = "deployments/configs"
+binaries_dir = "deployments/binaries"
 temp_dir = "/tmp/deployments"
 port = 8091
 
@@ -35,13 +36,18 @@ directory = "plugins"
 hot_reload = true
 
 [programs.agent]
-binary = "/usr/local/bin/agent"
-args = ["--mcp-socket", "/tmp/supervisor.sock"]
+binary = "/usr/local/bin/zeroclaw"
+args = ["daemon"]
 restart_on_crash = true
 
 [programs.memory]
-binary = "/usr/local/bin/memory"
+binary = "deployments/binaries/memory"
 args = ["--data-dir", "/data/memory"]
+restart_on_crash = true
+
+[programs.zerowrapper]
+binary = "/usr/local/bin/zw"
+args = []
 restart_on_crash = true
 
 [telemetry]
@@ -49,7 +55,7 @@ enabled = true
 output = "both"
 
 [telemetry.disk]
-path = "/var/log/supervisor/telemetry"
+path = "log/telemetry"
 filename_pattern = "telemetry_{date}.json"
 buffer_size = 500
 flush_interval_seconds = 5
