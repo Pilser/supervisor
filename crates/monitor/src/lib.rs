@@ -14,6 +14,6 @@ pub mod report;
 pub mod watcher;
 
 pub use monitor_loop::MonitorLoop;
-pub use programs::{ProgramRegistry, ProgramSpec};
+pub use programs::{agent_spec, memory_spec, zerowrapper_spec, ProgramRegistry, ProgramSpec};
 pub use report::{EventLog, MonitorStats, ProgramStatus};
 pub use watcher::{health_check, is_running, read_usage, HealthStatus, ResourceUsage};
