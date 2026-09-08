@@ -47,11 +47,19 @@ impl MonitorLoop {
 
     /// Launch every registered program that isn't already running.
     pub async fn launch_all(&mut self, telemetry: &telemetry::Telemetry) -> Result<()> {
-        for spec in self.registry.list() {
+        // Collect specs first to avoid borrowing `self` immutably (registry)
+        // while mutating it (running) inside launch_one.
+        let specs: Vec<ProgramSpec> = self
+            .registry
+            .list()
+            .into_iter()
+            .cloned()
+            .collect();
+        for spec in &specs {
             if self.running.contains_key(&spec.name) {
                 continue;
             }
-            self.launch_one(&spec, telemetry).await?;
+            self.launch_one(spec, telemetry).await?;
         }
         Ok(())
     }
@@ -154,9 +162,14 @@ impl MonitorLoop {
         // Find the PID of the most recently spawned process matching the binary.
         let mut sys = sysinfo::System::new_all();
         sys.refresh_processes(sysinfo::ProcessesToUpdate::All, true);
+        let binary = std::path::Path::new(&spec.binary);
+        let bin_name = binary.file_name().and_then(|n| n.to_str());
         sys.processes()
             .values()
-            .filter(|p| p.name().contains(&spec.binary) || spec.binary.contains(p.name().as_str()))
+            .filter(|p| match bin_name {
+                Some(name) => p.name().eq_ignore_ascii_case(name),
+                None => false,
+            })
             .max_by_key(|p| p.start_time())
             .map(|p| p.pid().as_u32())
     }
@@ -166,7 +179,7 @@ impl MonitorLoop {
         arc: Arc<Mutex<Self>>,
         interval_secs: u64,
         telemetry: telemetry::Telemetry,
-        cancel: tokio::sync::watch::Receiver<bool>,
+        mut cancel: tokio::sync::watch::Receiver<bool>,
     ) {
         let mut ticker = interval(Duration::from_secs(interval_secs));
         loop {

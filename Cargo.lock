@@ -23,7 +23,6 @@ version = "0.1.0"
 dependencies = [
  "anyhow",
  "commands",
- "core",
  "deployment",
  "heartbeat",
  "mcp",
@@ -33,6 +32,7 @@ dependencies = [
  "reqwest",
  "serde",
  "serde_json",
+ "shared",
  "telemetry",
  "tokio",
  "uuid",
@@ -141,23 +141,10 @@ name = "commands"
 version = "0.1.0"
 dependencies = [
  "anyhow",
- "core",
  "serde",
  "serde_json",
+ "shared",
  "telemetry",
- "tokio",
- "uuid",
-]
-
-[[package]]
-name = "core"
-version = "0.1.0"
-dependencies = [
- "anyhow",
- "chrono",
- "serde",
- "serde_json",
- "thiserror 2.0.20",
  "tokio",
  "uuid",
 ]
@@ -233,12 +220,12 @@ version = "0.1.0"
 dependencies = [
  "anyhow",
  "commands",
- "core",
  "plugin_host",
  "proxy",
  "reqwest",
  "serde",
  "serde_json",
+ "shared",
  "telemetry",
  "tokio",
  "uuid",
@@ -391,10 +378,10 @@ version = "0.1.0"
 dependencies = [
  "anyhow",
  "chrono",
- "core",
  "proxy",
  "serde",
  "serde_json",
+ "shared",
  "sysinfo",
  "telemetry",
  "tokio",
@@ -708,10 +695,10 @@ name = "mcp"
 version = "0.1.0"
 dependencies = [
  "anyhow",
- "core",
  "proxy",
  "serde",
  "serde_json",
+ "shared",
  "telemetry",
  "tokio",
  "uuid",
@@ -739,9 +726,9 @@ name = "monitor"
 version = "0.1.0"
 dependencies = [
  "anyhow",
- "core",
  "serde",
  "serde_json",
+ "shared",
  "sysinfo",
  "telemetry",
  "tokio",
@@ -812,10 +799,10 @@ name = "plugin_host"
 version = "0.1.0"
 dependencies = [
  "anyhow",
- "core",
  "libloading",
  "serde",
  "serde_json",
+ "shared",
  "telemetry",
  "tokio",
  "uuid",
@@ -854,10 +841,10 @@ version = "0.1.0"
 dependencies = [
  "anyhow",
  "chrono",
- "core",
  "reqwest",
  "serde",
  "serde_json",
+ "shared",
  "telemetry",
  "tokio",
  "uuid",
@@ -1206,6 +1193,19 @@ dependencies = [
 ]
 
 [[package]]
+name = "shared"
+version = "0.1.0"
+dependencies = [
+ "anyhow",
+ "chrono",
+ "serde",
+ "serde_json",
+ "thiserror 2.0.20",
+ "tokio",
+ "uuid",
+]
+
+[[package]]
 name = "shlex"
 version = "2.0.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1261,10 +1261,11 @@ version = "0.1.0"
 dependencies = [
  "anyhow",
  "api",
- "core",
+ "monitor",
  "reqwest",
  "serde",
  "serde_json",
+ "shared",
  "sysinfo",
  "telemetry",
  "tokio",
@@ -1333,11 +1334,11 @@ version = "0.1.0"
 dependencies = [
  "anyhow",
  "chrono",
- "core",
  "futures-util",
  "reqwest",
  "serde",
  "serde_json",
+ "shared",
  "tokio",
  "tokio-tungstenite",
  "toml",
