@@ -40,13 +40,21 @@ mod logging;
 #[tokio::main]
 async fn main() -> anyhow::Result<()> {
     // 1. Load config.toml.
-    let cfg = match config::load::load_from_file("config.toml") {
+    let mut cfg = match config::load::load_from_file("config.toml") {
         Ok(cfg) => cfg,
         Err(e) => {
             eprintln!("failed to load config.toml, using defaults: {e}");
             config::SupervisorConfig::default()
         }
     };
+    // Per-boot identity: the shared initramfs is identical for all tenants,
+    // so /init exports the real TENANT_ID (from the tenant_id= kernel arg).
+    // Env wins over the baked-in config default.
+    if let Ok(tenant_id) = std::env::var("TENANT_ID") {
+        if !tenant_id.trim().is_empty() {
+            cfg.supervisor.tenant_id = tenant_id;
+        }
+    }
     cfg.validate()
         .map_err(|e| anyhow::anyhow!("invalid config: {e}"))?;
 
