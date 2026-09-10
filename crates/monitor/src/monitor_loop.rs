@@ -11,7 +11,7 @@ use tokio::time::interval;
 use shared::Result;
 
 use crate::programs::{ProgramRegistry, ProgramSpec};
-use crate::recover::{escalate_to_wrapper, restart_program};
+use crate::recover::{escalate_to_wrapper, kill_process, restart_program};
 use crate::watcher::{
     health_check, read_agent_state, watch_process, HealthStatus, WatchedProcess,
 };
@@ -22,11 +22,20 @@ pub struct MonitorLoop {
     pub running: HashMap<String, WatchedProcess>,
     /// Path to the agent's state file (state/daemon_state.json), if any.
     pub agent_state_path: Option<PathBuf>,
+    /// Unix socket the agent daemon must answer on. A live PID is NOT
+    /// enough: snapshot restores (and crashes) can leave a running daemon
+    /// with a dead listener, which wedges zw's bridge forever.
+    pub agent_socket_path: Option<PathBuf>,
+    /// Consecutive socket dial failures.
+    pub socket_failures: u32,
     /// Consecutive restart failures per program.
     pub failures: HashMap<String, u32>,
     /// Give up and escalate after this many restart failures.
     pub max_restarts: u32,
 }
+
+/// Dial failures tolerated before healing the agent link.
+const SOCKET_FAILURE_THRESHOLD: u32 = 2;
 
 impl MonitorLoop {
     pub fn new(registry: ProgramRegistry) -> Self {
@@ -34,6 +43,8 @@ impl MonitorLoop {
             registry,
             running: HashMap::new(),
             agent_state_path: None,
+            agent_socket_path: None,
+            socket_failures: 0,
             failures: HashMap::new(),
             max_restarts: 5,
         }
@@ -42,6 +53,15 @@ impl MonitorLoop {
     /// Set the path the agent writes its health state to.
     pub fn with_agent_state_path(mut self, path: PathBuf) -> Self {
         self.agent_state_path = Some(path);
+        self
+    }
+
+    /// Set the daemon socket that must accept connections. Enables the
+    /// socket-health check in `tick()`: on repeated dial failures the
+    /// agent AND zerowrapper are restarted as a pair (zw holds dead dial
+    /// state, so restarting the agent alone just moves the wedge).
+    pub fn with_agent_socket_path(mut self, path: PathBuf) -> Self {
+        self.agent_socket_path = Some(path);
         self
     }
 
@@ -120,6 +140,79 @@ impl MonitorLoop {
         for name in crashed {
             self.handle_crash(&name, telemetry).await?;
         }
+
+        // Agent link health: PID-alive does not mean serving. Dial the
+        // daemon socket; a restored-or-wedged daemon stops answering while
+        // its PID looks fine, and zw's bridge hangs on the dead socket.
+        if self.agent_socket_path.is_some() {
+            self.check_agent_socket(telemetry).await?;
+        }
+        Ok(())
+    }
+
+    /// Dial the agent socket once (2s budget).
+    async fn probe_agent_socket(&self) -> bool {
+        let Some(ref path) = self.agent_socket_path else {
+            return true;
+        };
+        tokio::time::timeout(
+            Duration::from_secs(2),
+            tokio::net::UnixStream::connect(path),
+        )
+        .await
+        .is_ok_and(|r| r.is_ok())
+    }
+
+    /// Heal a dead agent link: kill the wedged pair, drop stale socket
+    /// files (a restarted daemon cannot bind otherwise), restart both.
+    async fn check_agent_socket(&mut self, telemetry: &telemetry::Telemetry) -> Result<()> {
+        if self.probe_agent_socket().await {
+            self.socket_failures = 0;
+            return Ok(());
+        }
+        self.socket_failures += 1;
+        telemetry
+            .builder()
+            .level(telemetry::Level::Warn)
+            .kind("monitor.socket_unreachable")
+            .category("monitor")
+            .message(format!(
+                "agent socket unreachable ({}/{SOCKET_FAILURE_THRESHOLD})",
+                self.socket_failures
+            ))
+            .emit();
+        if self.socket_failures < SOCKET_FAILURE_THRESHOLD {
+            return Ok(());
+        }
+        self.socket_failures = 0;
+        telemetry
+            .builder()
+            .level(telemetry::Level::Warn)
+            .kind("monitor.socket_heal")
+            .category("monitor")
+            .message("restarting agent+zerowrapper pair (dead daemon socket)")
+            .emit();
+        // Kill the wedged processes first: restart only spawns, and two
+        // daemons would fight over the socket lock.
+        for name in ["agent", "zerowrapper"] {
+            if let Some(proc) = self.running.get(name) {
+                let _ = kill_process(proc.pid, telemetry);
+            }
+        }
+        // Drop stale socket files so the fresh daemon can bind.
+        if let Some(ref path) = self.agent_socket_path {
+            let _ = std::fs::remove_file(path);
+            let _ = std::fs::remove_file(path.with_extension("sock.lock"));
+            let _ = std::fs::remove_file(
+                path.parent()
+                    .unwrap_or(std::path::Path::new("/tmp"))
+                    .join("daemon.sock.lock"),
+            );
+        }
+        // Restart the pair through the normal crash path (fresh PIDs,
+        // failure counting, escalation on repeated failure).
+        self.handle_crash("agent", telemetry).await?;
+        self.handle_crash("zerowrapper", telemetry).await?;
         Ok(())
     }
 

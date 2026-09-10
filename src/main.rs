@@ -149,6 +149,13 @@ async fn main() -> anyhow::Result<()> {
     if let Some(ref p) = cfg.monitor.agent_state_path {
         monitor_loop = monitor_loop.with_agent_state_path(std::path::PathBuf::from(p));
     }
+    // Socket-health healing: a live PID is not proof of service (snapshot
+    // restores leave running daemons with dead listeners). Env override for
+    // tests; the guest launch layout is the default.
+    let agent_socket = std::env::var("AGENT_SOCKET")
+        .unwrap_or_else(|_| "/data/zeroclaw/data/daemon.sock".to_string());
+    monitor_loop =
+        monitor_loop.with_agent_socket_path(std::path::PathBuf::from(agent_socket));
     // Launch all registered programs (agent, memory, zerowrapper).
     monitor_loop.launch_all(&telemetry).await?;
     telemetry
