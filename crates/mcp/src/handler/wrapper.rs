@@ -43,7 +43,8 @@ impl WrapperProxy {
                 .duration_since(std::time::UNIX_EPOCH)
                 .map(|d| d.as_secs().to_string())
                 .unwrap_or_default(),
-            "payload": {},
+            // The TCP wire has no headers: bearer goes in payload like send().
+            "payload": {"token": self.token},
         });
         let resp = self.client.send_json(envelope).await?;
         let payload = resp.get("payload");

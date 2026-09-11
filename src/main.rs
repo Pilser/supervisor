@@ -198,9 +198,11 @@ async fn main() -> anyhow::Result<()> {
         tokio::spawn(async move {
             let mut interval = tokio::time::interval(std::time::Duration::from_secs(60));
             let mut was_restricted = false;
+            let mut failures: u32 = 0;
             loop {
                 match proxy.granted_tools().await {
                     Ok(grants) => {
+                        failures = 0;
                         let restricted = grants.is_some();
                         let n = grants.as_ref().map(|g| g.len()).unwrap_or(0);
                         server.set_grants(grants).await;
@@ -212,10 +214,15 @@ async fn main() -> anyhow::Result<()> {
                         }
                     }
                     Err(e) => {
+                        failures += 1;
                         server.set_grants(None).await;
-                        if was_restricted {
+                        // First failure and transitions warn; steady-state
+                        // outage would otherwise fail open silently forever.
+                        if was_restricted || failures == 1 {
                             was_restricted = false;
-                            tracing::warn!("supervisor tool grants unreachable, listing all: {e:#}");
+                            tracing::warn!("supervisor tool grants query failed (listing all): {e:#}");
+                        } else {
+                            tracing::debug!("supervisor tool grants still failing: {e:#}");
                         }
                     }
                 }
