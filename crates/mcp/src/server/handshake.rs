@@ -53,22 +53,23 @@ fn handle_initialize(msg: &Message) -> Message {
     response_ok(id_of(msg), initialize_result())
 }
 
-/// Registry names (`save_memory`) vs grant dotted ops (`memory.save`):
-/// a grant matches when the registry name is the dotted op itself, the
-/// `verb_family` swap, or the bare verb.
+/// Registry names (`save_memory`) vs grant dotted ops (`memory.save`).
+/// Families are plural in grants (`reports.get`) but singular in the
+/// registry (`get_report`), so both shapes are candidates. A grant matches
+/// when the registry name is the dotted op itself, `verb_family`,
+/// `verb_singular-family`, or the bare verb.
 fn grant_matches(grant: &str, registry_name: &str) -> bool {
     if grant == registry_name {
         return true;
     }
     if let Some((family, verb)) = grant.split_once('.') {
-        if !verb.contains('_')
-            && (format!("{verb}_{family}") == registry_name || verb == registry_name)
-        {
-            return true;
+        if verb.contains('_') {
+            return verb == registry_name;
         }
-        if verb == registry_name {
-            return true;
-        }
+        let singular = family.strip_suffix('s').unwrap_or(family);
+        return format!("{verb}_{family}") == registry_name
+            || format!("{verb}_{singular}") == registry_name
+            || verb == registry_name;
     }
     false
 }
