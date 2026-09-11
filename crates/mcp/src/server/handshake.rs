@@ -29,7 +29,7 @@ pub async fn handle_message(
         // Client tells the server it is initialized — fire-and-forget.
         "notifications/initialized" | "initialized" => Ok(None),
         "ping" => Ok(Some(response_ok(id_of(&msg), json!({})))),
-        "tools/list" => handle_tools_list(server, &msg),
+        "tools/list" => handle_tools_list(server, &msg).await,
         "tools/call" => handle_tools_call(server, &msg).await,
         other => Ok(Some(response_err(
             id_of(&msg),
