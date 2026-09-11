@@ -183,7 +183,10 @@ async fn main() -> anyhow::Result<()> {
         &cfg.wrapper.auth_token,
         &cfg.supervisor.tenant_id,
     )?;
-    mcp::built_in::register_with_proxy(&mcp_registry, std::sync::Arc::clone(&wrapper_proxy))?;
+    mcp::built_in::register_with_proxy(
+        &mcp_registry,
+        std::sync::Arc::clone(&wrapper_proxy) as mcp::handler::SharedProxy,
+    )?;
     let mcp_server = mcp::server::McpServer::with_registry(std::sync::Arc::new(mcp_registry));
     let mcp_http_port = cfg.mcp.http_port;
     // Grant loop: ask the wrapper which dotted ops this tenant's category
