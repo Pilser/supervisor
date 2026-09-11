@@ -37,6 +37,15 @@ pub struct WrapperSection {
 pub struct McpSection {
     pub socket_path: String,
     pub max_connections: u32,
+    /// TCP port for the HTTP MCP endpoint (POST /mcp, streamable-http).
+    /// Daemon dials this via mcp.servers transport=http. Default 8092 —
+    /// 8080/8090/8091 are taken by nc/commands/deployment in-guest.
+    #[serde(default = "default_mcp_http_port")]
+    pub http_port: u16,
+}
+
+fn default_mcp_http_port() -> u16 {
+    8092
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]

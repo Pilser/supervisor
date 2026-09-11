@@ -5,9 +5,11 @@ edition = "2024"
 
 [dependencies]
 api = { path = "crates/api" }
+mcp = { path = "crates/mcp" }
 monitor = { path = "crates/monitor" }
 supervisor_core = { path = "crates/shared", package = "shared" }
 telemetry = { path = "crates/telemetry" }
+tracing = { workspace = true }
 tokio = { workspace = true }
 serde = { workspace = true }
 serde_json = { workspace = true }
@@ -34,6 +36,7 @@ resolver = "2"
 
 [workspace.dependencies]
 anyhow = "1"
+tracing = "0.1"
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
 tokio = { version = "1", features = ["full"] }

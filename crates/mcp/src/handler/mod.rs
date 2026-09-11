@@ -14,6 +14,9 @@ pub mod projects;
 pub mod reports;
 pub mod skills;
 pub mod tenant;
+pub mod wrapper;
+
+pub use wrapper::WrapperProxy;
 
 use std::sync::Arc;
 

@@ -172,16 +172,33 @@ async fn main() -> anyhow::Result<()> {
         ))
         .emit();
 
-    // 8. mcp::server::start() — start MCP server on unix socket.
+    // 8. MCP servers — unix socket (legacy) + HTTP for the daemon.
+    //    Registry + wrapper-backed tools, then POST /mcp on 127.0.0.1:http_port
+    //    which the zeroclaw daemon dials with mcp.servers transport=http.
     let mcp_api = api::McpApi::new(&cfg.mcp.socket_path, cfg.mcp.max_connections);
+    let mcp_registry = mcp::tools::ToolRegistry::new();
+    let wrapper_proxy = mcp::handler::WrapperProxy::new(
+        &cfg.wrapper.address,
+        cfg.wrapper.port,
+        &cfg.wrapper.auth_token,
+        &cfg.supervisor.tenant_id,
+    )?;
+    mcp::built_in::register_with_proxy(&mcp_registry, wrapper_proxy)?;
+    let mcp_server = mcp::server::McpServer::with_registry(std::sync::Arc::new(mcp_registry));
+    let mcp_http_port = cfg.mcp.http_port;
+    tokio::spawn(async move {
+        if let Err(e) = mcp::server::http::serve_http(mcp_server, mcp_http_port).await {
+            tracing::error!("supervisor MCP HTTP server exited: {e}");
+        }
+    });
     telemetry
         .builder()
         .level(telemetry::Level::Info)
         .kind("supervisor.connected")
         .category("mcp")
         .message(format!(
-            "mcp server configured on {} (max_connections={}; serve once mcp server lands)",
-            mcp_api.socket_path, mcp_api.max_connections
+            "mcp server on {} (max_connections={}) + http 127.0.0.1:{}/mcp",
+            mcp_api.socket_path, mcp_api.max_connections, mcp_http_port
         ))
         .emit();
 

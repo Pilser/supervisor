@@ -6,6 +6,7 @@
 //! [`McpServer`] registry.
 
 pub mod handshake;
+pub mod http;
 pub mod shutdown;
 pub mod tcp;
 pub mod unix;
