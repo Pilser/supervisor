@@ -7,11 +7,13 @@ use serde_json::Value;
 
 use super::{DataProxy, ProxyFuture};
 
-/// `DataProxy` that sends every envelope to the wrapper and stamps
-/// `tenant_id` when the envelope carries none (or `"local"`).
+/// `DataProxy` that sends every envelope to the wrapper, stamping this VM's
+/// `tenant_id` and embedding the supervisor bearer token into `payload`
+/// (the TCP wire has no headers — this mirrors `ProxyClient::call`).
 pub struct WrapperProxy {
     client: proxy::ProxyClient,
     tenant_id: String,
+    token: String,
 }
 
 impl WrapperProxy {
@@ -24,6 +26,7 @@ impl WrapperProxy {
         Ok(Arc::new(Self {
             client: proxy::ProxyClient::new(address, port, token)?,
             tenant_id: tenant_id.to_string(),
+            token: token.to_string(),
         }))
     }
 }
@@ -35,12 +38,17 @@ impl DataProxy for WrapperProxy {
             .and_then(Value::as_str)
             .map(|t| t.is_empty() || t == super::LOCAL_TENANT_ID)
             .unwrap_or(true);
-        if needs_stamp {
-            if let Some(obj) = json.as_object_mut() {
+        if let Some(obj) = json.as_object_mut() {
+            if needs_stamp {
                 obj.insert(
                     "tenant_id".to_string(),
                     Value::String(self.tenant_id.clone()),
                 );
+            }
+            if let Some(payload) = obj.get_mut("payload").and_then(|p| p.as_object_mut()) {
+                payload
+                    .entry("token")
+                    .or_insert_with(|| Value::String(self.token.clone()));
             }
         }
         let client = self.client.clone();
