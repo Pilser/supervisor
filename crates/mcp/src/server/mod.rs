@@ -27,6 +27,10 @@ pub use shutdown::{Shutdown, ShutdownSignal};
 #[derive(Clone)]
 pub struct McpServer {
     pub registry: Arc<ToolRegistry>,
+    /// Category grant filter: `None` = list everything (unrestricted or
+    /// wrapper unreachable — fail-open); `Some(set)` = list only these
+    /// dotted op names. Refreshed from the wrapper by the grant loop.
+    pub grants: Arc<tokio::sync::RwLock<Option<Vec<String>>>>,
 }
 
 impl McpServer {
@@ -34,12 +38,21 @@ impl McpServer {
     pub fn new() -> Self {
         Self {
             registry: Arc::new(ToolRegistry::new()),
+            grants: Arc::new(tokio::sync::RwLock::new(None)),
         }
     }
 
     /// A server sharing an existing registry.
     pub fn with_registry(registry: Arc<ToolRegistry>) -> Self {
-        Self { registry }
+        Self {
+            registry,
+            grants: Arc::new(tokio::sync::RwLock::new(None)),
+        }
+    }
+
+    /// Replace the grant filter (`None` clears back to unrestricted).
+    pub async fn set_grants(&self, grants: Option<Vec<String>>) {
+        *self.grants.write().await = grants;
     }
 
     /// Hook: a client connected.

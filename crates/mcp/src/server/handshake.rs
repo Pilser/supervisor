@@ -53,12 +53,41 @@ fn handle_initialize(msg: &Message) -> Message {
     response_ok(id_of(msg), initialize_result())
 }
 
-/// Respond with the advertised tool list from the registry.
-fn handle_tools_list(server: &McpServer, msg: &Message) -> anyhow::Result<Option<Message>> {
+/// Registry names (`save_memory`) vs grant dotted ops (`memory.save`):
+/// a grant matches when the registry name is the dotted op itself, the
+/// `verb_family` swap, or the bare verb.
+fn grant_matches(grant: &str, registry_name: &str) -> bool {
+    if grant == registry_name {
+        return true;
+    }
+    if let Some((family, verb)) = grant.split_once('.') {
+        if !verb.contains('_')
+            && (format!("{verb}_{family}") == registry_name || verb == registry_name)
+        {
+            return true;
+        }
+        if verb == registry_name {
+            return true;
+        }
+    }
+    false
+}
+
+/// Respond with the advertised tool list from the registry, filtered to the
+/// tenant category's grant set when one is active. The daemon only ever sees
+/// the filtered names, so ungranted tools are invisible (not just rejected).
+async fn handle_tools_list(server: &McpServer, msg: &Message) -> anyhow::Result<Option<Message>> {
+    let grants = server.grants.read().await.clone();
     let tools: Vec<Value> = server
         .registry
         .list()
         .into_iter()
+        .filter(|t| match &grants {
+            // None = unrestricted (or wrapper unreachable: fail-open).
+            None => true,
+            // Some, even empty (= deny all categories), filters strictly.
+            Some(set) => set.iter().any(|g| grant_matches(g, &t.name)),
+        })
         .map(|t| {
             json!({
                 "name": t.name,

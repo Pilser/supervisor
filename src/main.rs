@@ -183,9 +183,43 @@ async fn main() -> anyhow::Result<()> {
         &cfg.wrapper.auth_token,
         &cfg.supervisor.tenant_id,
     )?;
-    mcp::built_in::register_with_proxy(&mcp_registry, wrapper_proxy)?;
+    mcp::built_in::register_with_proxy(&mcp_registry, std::sync::Arc::clone(&wrapper_proxy))?;
     let mcp_server = mcp::server::McpServer::with_registry(std::sync::Arc::new(mcp_registry));
     let mcp_http_port = cfg.mcp.http_port;
+    // Grant loop: ask the wrapper which dotted ops this tenant's category
+    // may list (tools.granted), refresh every 60s. Wrapper-down fails open
+    // (list everything) so a blip never bricks the agent.
+    {
+        let proxy = std::sync::Arc::clone(&wrapper_proxy);
+        let server = mcp_server.clone();
+        tokio::spawn(async move {
+            let mut interval = tokio::time::interval(std::time::Duration::from_secs(60));
+            let mut was_restricted = false;
+            loop {
+                match proxy.granted_tools().await {
+                    Ok(grants) => {
+                        let restricted = grants.is_some();
+                        let n = grants.as_ref().map(|g| g.len()).unwrap_or(0);
+                        server.set_grants(grants).await;
+                        if restricted != was_restricted {
+                            was_restricted = restricted;
+                            tracing::info!(
+                                "supervisor tool grants refreshed: {n} tools (restricted={restricted})"
+                            );
+                        }
+                    }
+                    Err(e) => {
+                        server.set_grants(None).await;
+                        if was_restricted {
+                            was_restricted = false;
+                            tracing::warn!("supervisor tool grants unreachable, listing all: {e:#}");
+                        }
+                    }
+                }
+                interval.tick().await;
+            }
+        });
+    }
     tokio::spawn(async move {
         if let Err(e) = mcp::server::http::serve_http(mcp_server, mcp_http_port).await {
             tracing::error!("supervisor MCP HTTP server exited: {e}");

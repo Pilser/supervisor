@@ -31,6 +31,43 @@ impl WrapperProxy {
     }
 }
 
+impl WrapperProxy {
+    /// Ask the wrapper which dotted ops this tenant may list and call
+    /// (`tools.granted` envelope). Returns `None` when unrestricted —
+    /// the caller must then list everything.
+    pub async fn granted_tools(&self) -> anyhow::Result<Option<Vec<String>>> {
+        let envelope = serde_json::json!({
+            "type": "tools.granted",
+            "tenant_id": self.tenant_id,
+            "timestamp": std::time::SystemTime::now()
+                .duration_since(std::time::UNIX_EPOCH)
+                .map(|d| d.as_secs().to_string())
+                .unwrap_or_default(),
+            "payload": {},
+        });
+        let resp = self.client.send_json(envelope).await?;
+        let payload = resp.get("payload");
+        let restricted = payload
+            .and_then(|p| p.get("restricted"))
+            .and_then(|r| r.as_bool())
+            .unwrap_or(false);
+        if !restricted {
+            return Ok(None);
+        }
+        Ok(Some(
+            payload
+                .and_then(|p| p.get("tools"))
+                .and_then(|t| t.as_array())
+                .map(|a| {
+                    a.iter()
+                        .filter_map(|v| v.as_str().map(|s| s.to_string()))
+                        .collect()
+                })
+                .unwrap_or_default(),
+        ))
+    }
+}
+
 impl DataProxy for WrapperProxy {
     fn send(&self, mut json: Value) -> ProxyFuture<'static> {
         let needs_stamp = json
