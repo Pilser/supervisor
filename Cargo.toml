@@ -5,6 +5,7 @@ edition = "2024"
 
 [dependencies]
 api = { path = "crates/api" }
+heartbeat = { path = "crates/heartbeat" }
 mcp = { path = "crates/mcp" }
 monitor = { path = "crates/monitor" }
 supervisor_core = { path = "crates/shared", package = "shared" }

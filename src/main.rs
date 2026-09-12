@@ -254,25 +254,54 @@ async fn main() -> anyhow::Result<()> {
         serde_json::json!({ "vm_id": cfg.supervisor.vm_id }),
     );
 
-    // 10. heartbeat::start() → start sending heartbeats.
+    // 10. heartbeat::start() → send heartbeats to the wrapper every
+    // interval. The wrapper feeds them into admin liveness (dashboard
+    // heartbeat age) — a quiet VM still pulses.
     let heartbeat_api = api::HeartbeatApi::new(cfg.heartbeat.interval_seconds)
         .map_err(|e| anyhow::anyhow!(e.to_string()))?;
-    let hb_payload = heartbeat_api
-        .payload(
-            &cfg.supervisor.vm_id,
-            &cfg.supervisor.tenant_id,
-            serde_json::json!({}),
-            serde_json::json!({}),
-        )
-        .map_err(|e| anyhow::anyhow!(e.to_string()))?;
+    {
+        let hb_interval = std::time::Duration::from_secs(cfg.heartbeat.interval_seconds);
+        let hb_vm = cfg.supervisor.vm_id.clone();
+        let hb_tenant = cfg.supervisor.tenant_id.clone();
+        let hb_addr = cfg.wrapper.address.clone();
+        let hb_port = cfg.wrapper.port;
+        let hb_token = cfg.wrapper.auth_token.clone();
+        let hb_tel = telemetry.clone();
+        tokio::spawn(async move {
+            // Small delay so the wrapper listener is up before the first beat.
+            tokio::time::sleep(std::time::Duration::from_secs(5)).await;
+            let mut tick = tokio::time::interval(hb_interval);
+            loop {
+                tick.tick().await;
+                let payload = heartbeat_api.payload(
+                    &hb_vm,
+                    &hb_tenant,
+                    serde_json::json!({}),
+                    serde_json::json!({}),
+                );
+                match payload {
+                    Ok(p) => {
+                        if let Err(e) = heartbeat::send_heartbeat(
+                            &p, &hb_addr, hb_port, &hb_token, &hb_tel,
+                        )
+                        .await
+                        {
+                            tracing::warn!("heartbeat send failed: {e:#}");
+                        }
+                    }
+                    Err(e) => tracing::warn!("heartbeat payload failed: {e}"),
+                }
+            }
+        });
+    }
     telemetry
         .builder()
         .level(telemetry::Level::Info)
         .kind("heartbeat.send")
         .category("heartbeat")
         .message(format!(
-            "heartbeat ready every {}s (send via send_heartbeat once proxy wired): vm={}",
-            cfg.heartbeat.interval_seconds, hb_payload.vm_id
+            "heartbeat sender started every {}s: vm={}",
+            cfg.heartbeat.interval_seconds, cfg.supervisor.vm_id
         ))
         .emit();
 
