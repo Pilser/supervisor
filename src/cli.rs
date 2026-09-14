@@ -1,26 +1,28 @@
+//! Portfolio CLI embedded in supervisor binary.
+//! Invocation: `portfolio show ...` (symlink portfolio -> supervisor) or
+//! `supervisor portfolio show ...`. Shares wrapper proxy with daemon.
+
 use clap::{Parser, Subcommand};
 use serde_json::{json, Value};
 
-#[derive(Parser)]
+#[derive(Parser, Debug)]
 #[command(name = "portfolio", about = "Portfolio ledger CLI — talks to wrapper via supervisor proxy")]
-struct Cli {
+pub struct Cli {
     #[arg(long, env = "WRAPPER_ADDRESS", default_value = "172.16.0.1")]
-    wrapper_address: String,
+    pub wrapper_address: String,
     #[arg(long, env = "WRAPPER_PORT", default_value = "9090")]
-    wrapper_port: u16,
+    pub wrapper_port: u16,
     #[arg(long, env = "WRAPPER_TOKEN", default_value = "")]
-    token: String,
+    pub token: String,
     #[arg(long, env = "TENANT_ID")]
-    tenant_id: Option<String>,
+    pub tenant_id: Option<String>,
     #[command(subcommand)]
-    command: Command,
+    pub command: Command,
 }
 
-#[derive(Subcommand)]
-enum Command {
-    Show {
-        #[arg(long)] json: bool,
-    },
+#[derive(Subcommand, Debug)]
+pub enum Command {
+    Show { #[arg(long)] json: bool },
     Update {
         #[arg(long)] name: Option<String>,
         #[arg(long)] nickname: Option<String>,
@@ -28,88 +30,64 @@ enum Command {
         #[arg(long)] language: Option<String>,
         #[arg(long)] timezone: Option<String>,
     },
-    Goal {
-        #[command(subcommand)]
-        cmd: GoalCmd,
-    },
-    Milestone {
-        #[command(subcommand)]
-        cmd: MilestoneCmd,
-    },
-    Task {
-        #[command(subcommand)]
-        cmd: TaskCmd,
-    },
-    Attempt {
-        #[command(subcommand)]
-        cmd: AttemptCmd,
-    },
-    Skill {
-        #[command(subcommand)]
-        cmd: SkillCmd,
-    },
-    Achievement {
-        #[command(subcommand)]
-        cmd: AchievementCmd,
-    },
-    Report {
-        #[command(subcommand)]
-        cmd: ReportCmd,
-    },
-    Timeline {
-        #[command(subcommand)]
-        cmd: TimelineCmd,
-    },
+    Goal { #[command(subcommand)] cmd: GoalCmd },
+    Milestone { #[command(subcommand)] cmd: MilestoneCmd },
+    Task { #[command(subcommand)] cmd: TaskCmd },
+    Attempt { #[command(subcommand)] cmd: AttemptCmd },
+    Skill { #[command(subcommand)] cmd: SkillCmd },
+    Achievement { #[command(subcommand)] cmd: AchievementCmd },
+    Report { #[command(subcommand)] cmd: ReportCmd },
+    Timeline { #[command(subcommand)] cmd: TimelineCmd },
 }
 
-#[derive(Subcommand)]
-enum GoalCmd {
+#[derive(Subcommand, Debug)]
+pub enum GoalCmd {
     Create { #[arg(long)] title: String, #[arg(long)] track: Option<String>, #[arg(long)] target_date: Option<String> },
     Update { #[arg(long)] id: i64, #[arg(long)] title: Option<String>, #[arg(long)] status: Option<String>, #[arg(long)] target_date: Option<String> },
     List { #[arg(long)] status: Option<String>, #[arg(long)] limit: Option<i64> },
     Get { #[arg(long)] id: i64 },
 }
-#[derive(Subcommand)]
-enum MilestoneCmd {
+#[derive(Subcommand, Debug)]
+pub enum MilestoneCmd {
     Add { #[arg(long)] goal: i64, #[arg(long)] title: String, #[arg(long)] order: Option<i64> },
     List { #[arg(long)] goal: i64 },
     Update { #[arg(long)] id: i64, #[arg(long)] title: Option<String>, #[arg(long)] status: Option<String> },
 }
-#[derive(Subcommand)]
-enum TaskCmd {
+#[derive(Subcommand, Debug)]
+pub enum TaskCmd {
     Create { #[arg(long)] milestone: i64, #[arg(long)] title: String, #[arg(long)] kind: String, #[arg(long)] description: Option<String>, #[arg(long)] difficulty: Option<String> },
     Update { #[arg(long)] id: i64, #[arg(long)] title: Option<String>, #[arg(long)] status: Option<String>, #[arg(long)] description: Option<String> },
     List { #[arg(long)] milestone: Option<i64>, #[arg(long)] status: Option<String>, #[arg(long)] kind: Option<String> },
     Get { #[arg(long)] id: i64 },
 }
-#[derive(Subcommand)]
-enum AttemptCmd {
+#[derive(Subcommand, Debug)]
+pub enum AttemptCmd {
     Submit { #[arg(long)] task: i64, #[arg(long)] result: String, #[arg(long)] output: String, #[arg(long)] feedback: Option<String> },
     Resolve { #[arg(long)] id: i64, #[arg(long)] example: String, #[arg(long)] note: Option<String> },
     List { #[arg(long)] task: i64, #[arg(long)] limit: Option<i64> },
     Get { #[arg(long)] id: i64 },
 }
-#[derive(Subcommand)]
-enum SkillCmd {
+#[derive(Subcommand, Debug)]
+pub enum SkillCmd {
     Record { #[arg(long)] name: String, #[arg(long)] domain: Option<String>, #[arg(long)] level: Option<String>, #[arg(long)] evidence: Option<i64>, #[arg(long)] confidence: Option<f64> },
     Update { #[arg(long)] id: i64, #[arg(long)] level: Option<String>, #[arg(long)] evidence: Option<i64> },
     List { #[arg(long)] domain: Option<String> },
     Get { #[arg(long)] id: i64 },
 }
-#[derive(Subcommand)]
-enum AchievementCmd {
+#[derive(Subcommand, Debug)]
+pub enum AchievementCmd {
     Award { #[arg(long)] title: String, #[arg(long)] skill: Option<i64>, #[arg(long)] task: Option<i64> },
     List { #[arg(long)] limit: Option<i64> },
     Get { #[arg(long)] id: i64 },
 }
-#[derive(Subcommand)]
-enum ReportCmd {
+#[derive(Subcommand, Debug)]
+pub enum ReportCmd {
     Generate { #[arg(long)] period: String, #[arg(long)] content: Option<String> },
     List { #[arg(long)] limit: Option<i64> },
     Get { #[arg(long)] id: i64 },
 }
-#[derive(Subcommand)]
-enum TimelineCmd {
+#[derive(Subcommand, Debug)]
+pub enum TimelineCmd {
     List { #[arg(long)] kind: Option<String>, #[arg(long)] since: Option<String>, #[arg(long)] limit: Option<i64> },
     Get { #[arg(long)] id: i64 },
     Add { #[arg(long)] summary: String, #[arg(long)] kind: Option<String>, #[arg(long, alias="ref-id")] ref_id: Option<i64>, #[arg(long, alias="ref-type")] ref_type: Option<String> },
@@ -118,25 +96,23 @@ enum TimelineCmd {
 fn tenant_id_or_fail(cli: &Cli) -> anyhow::Result<String> {
     if let Some(t) = cli.tenant_id.clone() { if !t.trim().is_empty() { return Ok(t); } }
     if let Ok(t) = std::env::var("TENANT_ID") { if !t.trim().is_empty() { return Ok(t); } }
-    // fallback: read tenant_id from config.toml if present
     if let Ok(s) = std::fs::read_to_string("config.toml") { for line in s.lines() { if line.trim().starts_with("tenant_id") { if let Some(v) = line.split('=').nth(1) { let v = v.trim().trim_matches('"').trim_matches('\''); if !v.is_empty() { return Ok(v.to_string()); } } } } }
     anyhow::bail!("TENANT_ID not set (env or config.toml)")
 }
 
 async fn call(tenant_id: &str, op: &str, rtype: &str, data: Value, cli: &Cli) -> anyhow::Result<Value> {
     let tenant = shared::TenantContext::new(tenant_id, "", "", "");
-    let envelope = proxy::RequestBuilder::new(proxy::RequestType::from_str(rtype).unwrap()).operation(op).tenant(tenant).data(data).build()?;
-    // ProxyClient expects token inside payload; RequestBuilder doesn't stamp token, WrapperProxy does — here we embed it
-    let mut env = envelope;
-    if let Some(obj) = env.as_object_mut() { if let Some(p) = obj.get_mut("payload").and_then(|p| p.as_object_mut()) { p.entry("token".to_string()).or_insert(Value::String(cli.token.clone())); } }
+    let rtype = proxy::RequestType::from_str(rtype).ok_or_else(|| anyhow::anyhow!("unknown request type {rtype}"))?;
+    let mut envelope = proxy::RequestBuilder::new(rtype).operation(op).tenant(tenant).data(data).build()?;
+    if let Some(obj) = envelope.as_object_mut() { if let Some(p) = obj.get_mut("payload").and_then(|p| p.as_object_mut()) { p.entry("token".to_string()).or_insert(Value::String(cli.token.clone())); } }
     let client = proxy::ProxyClient::new(&cli.wrapper_address, cli.wrapper_port, &cli.token)?;
-    let resp = client.send_json(env).await?;
+    let resp = client.send_json(envelope).await?;
     Ok(resp.get("payload").cloned().unwrap_or(resp))
 }
 
-#[tokio::main]
-async fn main() -> anyhow::Result<()> {
-    let cli = Cli::parse();
+pub async fn run_from_args(args: Vec<String>) -> anyhow::Result<()> {
+    // args[0] is prog, rest are cli args (already stripped of "portfolio" prefix if needed)
+    let cli = Cli::parse_from(args);
     let tenant_id = tenant_id_or_fail(&cli)?;
     let (op, rtype, data) = match &cli.command {
         Command::Show { .. } => ("portfolio.show", "db_read", json!({})),
@@ -187,7 +163,38 @@ async fn main() -> anyhow::Result<()> {
         },
     };
     let resp = call(&tenant_id, op, rtype, data, &cli).await?;
-    let pretty = serde_json::to_string_pretty(&resp)?;
-    println!("{}", pretty);
+    println!("{}", serde_json::to_string_pretty(&resp)?);
     Ok(())
+}
+
+/// True when this invocation should act as `portfolio` CLI rather than daemon.
+/// Cases: binary name is `portfolio` (symlink), or first arg is portfolio subcommand,
+/// or `supervisor portfolio ...` form.
+pub fn is_portfolio_invocation(args: &[String]) -> bool {
+    let prog = std::path::Path::new(args.first().map(|s| s.as_str()).unwrap_or(""))
+        .file_name().and_then(|s| s.to_str()).unwrap_or("");
+    if prog == "portfolio" { return true; }
+    const SUBS: &[&str] = &["show","update","goal","milestone","task","attempt","skill","achievement","report","timeline","--help","-h","--version"];
+    if args.len() >= 2 && SUBS.contains(&args[1].as_str()) { return true; }
+    if args.len() >= 2 && args[1] == "portfolio" { return true; }
+    false
+}
+
+pub fn normalize_portfolio_args(mut args: Vec<String>) -> Vec<String> {
+    // `supervisor portfolio show` -> `portfolio show`
+    // `portfolio show` already ok, `portfolio` binary already has prog portfolio
+    if args.len() >= 2 && args[1] == "portfolio" {
+        let mut v = vec![args[0].clone()];
+        v.extend(args[2..].iter().cloned());
+        if v[0].contains("supervisor") { v[0] = "portfolio".to_string(); }
+        return v;
+    }
+    // invoked as `supervisor show` (no portfolio word) -> inject portfolio prog name for clap
+    let prog = std::path::Path::new(&args[0]).file_name().and_then(|s| s.to_str()).unwrap_or("");
+    if prog != "portfolio" && args.len() >= 2 && ["show","update","goal","milestone","task","attempt","skill","achievement","report","timeline"].contains(&args[1].as_str()) {
+        let mut v = vec!["portfolio".to_string()];
+        v.extend(args[1..].iter().cloned());
+        return v;
+    }
+    args
 }

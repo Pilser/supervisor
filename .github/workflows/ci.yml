@@ -55,10 +55,10 @@ jobs:
       - name: cargo test
         run: cargo test --workspace
 
-      # Release artifacts on main/master (expensive — skip on PRs)
+      # Release artifact on main/master (expensive — skip on PRs)
       - name: cargo build (release)
         if: github.ref == 'refs/heads/main' || github.ref == 'refs/heads/master' || github.event_name == 'workflow_dispatch'
-        run: cargo build -p supervisor -p portfolio-cli --release
+        run: cargo build -p supervisor --release
 
       - name: Upload supervisor binary
         if: github.ref == 'refs/heads/main' || github.ref == 'refs/heads/master' || github.event_name == 'workflow_dispatch'
@@ -68,12 +68,4 @@ jobs:
           path: target/release/supervisor
           retention-days: 14
           if-no-files-found: error
-
-      - name: Upload portfolio binary
-        if: github.ref == 'refs/heads/main' || github.ref == 'refs/heads/master' || github.event_name == 'workflow_dispatch'
-        uses: actions/upload-artifact@v4
-        with:
-          name: portfolio-linux-x86_64
-          path: target/release/portfolio
-          retention-days: 14
-          if-no-files-found: error
+      # portfolio is now symlink `portfolio -> supervisor` (same binary, cli mode via argv[0])
