@@ -2,7 +2,6 @@
 
 use std::sync::Arc;
 
-use serde::Deserialize;
 use serde_json::Value;
 
 use crate::tools::handler::{BoxFuture, ToolHandler};
