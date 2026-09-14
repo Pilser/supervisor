@@ -101,7 +101,7 @@ fn tenant_id_or_fail(cli: &Cli) -> anyhow::Result<String> {
 }
 
 async fn call(tenant_id: &str, op: &str, rtype: &str, data: Value, cli: &Cli) -> anyhow::Result<Value> {
-    let tenant = shared::TenantContext::new(tenant_id, "", "", "");
+    let tenant = supervisor_core::TenantContext::new(tenant_id, "", "", "");
     let rtype = proxy::RequestType::from_str(rtype).ok_or_else(|| anyhow::anyhow!("unknown request type {rtype}"))?;
     let mut envelope = proxy::RequestBuilder::new(rtype).operation(op).tenant(tenant).data(data).build()?;
     if let Some(obj) = envelope.as_object_mut() { if let Some(p) = obj.get_mut("payload").and_then(|p| p.as_object_mut()) { p.entry("token".to_string()).or_insert(Value::String(cli.token.clone())); } }

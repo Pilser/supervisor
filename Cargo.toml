@@ -9,7 +9,6 @@ heartbeat = { path = "crates/heartbeat" }
 mcp = { path = "crates/mcp" }
 monitor = { path = "crates/monitor" }
 proxy = { path = "crates/proxy" }
-shared = { path = "crates/shared" }
 supervisor_core = { path = "crates/shared", package = "shared" }
 telemetry = { path = "crates/telemetry" }
 tracing = { workspace = true }
