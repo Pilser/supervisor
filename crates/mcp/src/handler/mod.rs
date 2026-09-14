@@ -6,14 +6,7 @@
 //! return a serializable result. `tenant_id` is required on every envelope;
 //! tool params carrying `tenant_id` use it, otherwise `"local"` is stamped.
 
-pub mod configs;
-pub mod history;
-pub mod memory;
-pub mod profile;
-pub mod projects;
-pub mod reports;
-pub mod skills;
-pub mod tenant;
+pub mod portfolio;
 pub mod wrapper;
 
 pub use wrapper::WrapperProxy;

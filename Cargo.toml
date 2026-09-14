@@ -32,6 +32,7 @@ members = [
     "crates/deployment",
     "crates/plugin_host",
     "crates/api",
+    "crates/cli",
 ]
 resolver = "2"
 
