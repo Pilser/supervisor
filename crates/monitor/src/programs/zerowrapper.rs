@@ -9,5 +9,7 @@ pub fn zerowrapper_spec(binary: &str) -> ProgramSpec {
         binary: binary.to_string(),
         args: vec![],
         restart_on_crash: true,
+        daemonizes: false,
+        health_port: None,
     }
 }

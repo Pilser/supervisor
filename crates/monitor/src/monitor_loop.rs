@@ -95,7 +95,8 @@ impl MonitorLoop {
         let mut crashed: Vec<String> = Vec::new();
 
         // Owned handles first: try_wait() reaps exited children (no zombies)
-        // and reports the exit, race-free.
+        // and reports the exit, race-free. A `daemonizes` launcher exiting
+        // is EXPECTED (it forked the real daemon) — drop the handle quietly.
         let mut exited: Vec<String> = Vec::new();
         for (name, child) in self.children.iter_mut() {
             match child.try_wait() {
@@ -106,7 +107,12 @@ impl MonitorLoop {
         }
         for name in exited {
             self.children.remove(&name);
-            if !crashed.contains(&name) {
+            let daemonizes = self
+                .registry
+                .get(&name)
+                .ok()
+                .is_some_and(|s| s.daemonizes);
+            if !daemonizes && !crashed.contains(&name) {
                 crashed.push(name);
             }
         }
@@ -116,6 +122,24 @@ impl MonitorLoop {
             // restart the program twice and duplicate the daemon.
             if crashed.contains(name) {
                 continue;
+            }
+            // Daemonizing servers are watched by port, not by launcher PID.
+            if let Ok(spec) = self.registry.get(name) {
+                if spec.daemonizes {
+                    if let Some(port) = spec.health_port {
+                        if !Self::probe_port(port).await {
+                            telemetry
+                                .builder()
+                                .level(telemetry::Level::Warn)
+                                .kind("monitor.port_unreachable")
+                                .category("monitor")
+                                .message(format!("{name} port {port} unreachable"))
+                                .emit();
+                            crashed.push(name.clone());
+                        }
+                    }
+                    continue;
+                }
             }
             match health_check(proc.pid, name, telemetry)? {
                 HealthStatus::Alive => {}
@@ -173,6 +197,19 @@ impl MonitorLoop {
             self.failures.insert(name.to_string(), 0);
             return Ok(());
         }
+        // A daemonizing server outlives its launcher: kill the real daemon
+        // by exact process name (== spec name by convention) so the fresh
+        // launch doesn't pile onto a live one fighting over the port + DB.
+        if spec.daemonizes {
+            let killed = Self::kill_by_name(&spec.name, telemetry);
+            telemetry
+                .builder()
+                .level(telemetry::Level::Info)
+                .kind("monitor.daemon_killed")
+                .category("monitor")
+                .message(format!("killed {killed} '{}(s)' before relaunch", spec.name))
+                .emit();
+        }
         self.running.remove(name);
         self.children.remove(name);
         let child = restart_program(&spec, telemetry).await?;
@@ -184,6 +221,32 @@ impl MonitorLoop {
         self.running.insert(name.to_string(), watched);
         self.children.insert(name.to_string(), child);
         Ok(())
+    }
+
+    /// Probe 127.0.0.1:port with a short budget (daemon liveness).
+    async fn probe_port(port: u16) -> bool {
+        tokio::time::timeout(
+            Duration::from_secs(2),
+            tokio::net::TcpStream::connect(("127.0.0.1", port)),
+        )
+        .await
+        .is_ok_and(|r| r.is_ok())
+    }
+
+    /// Kill all processes with exactly `process_name` (sysinfo exact match —
+    /// no shell-pattern footguns). Returns the kill count. Used for
+    /// self-daemonizing servers whose launcher PID is already gone.
+    fn kill_by_name(process_name: &str, telemetry: &telemetry::Telemetry) -> usize {
+        let mut sys = sysinfo::System::new_all();
+        sys.refresh_processes(sysinfo::ProcessesToUpdate::All, true);
+        let mut n = 0usize;
+        for proc in sys.processes().values() {
+            if proc.name() == process_name && proc.kill() {
+                n += 1;
+            }
+        }
+        let _ = telemetry;
+        n
     }
 
     /// Spawn the loop as a long-running task. Returns when `cancel` fires.

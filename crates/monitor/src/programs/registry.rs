@@ -12,6 +12,16 @@ pub struct ProgramSpec {
     pub binary: String,
     pub args: Vec<String>,
     pub restart_on_crash: bool,
+    /// Self-daemonizing server (parent exits right after spawning the real
+    /// daemon, e.g. `engram serve`). The launcher exit is EXPECTED, not a
+    /// crash: liveness comes from `health_port`, and restarts kill by exact
+    /// process name instead of the dead launcher PID.
+    #[serde(default)]
+    pub daemonizes: bool,
+    /// TCP port on 127.0.0.1 that must accept connections for `daemonizes`
+    /// programs (None = PID watch as usual).
+    #[serde(default)]
+    pub health_port: Option<u16>,
 }
 
 /// Named set of programs under supervision.

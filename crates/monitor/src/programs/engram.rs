@@ -9,5 +9,10 @@ pub fn engram_spec(binary: &str) -> ProgramSpec {
         binary: binary.to_string(),
         args: vec![],
         restart_on_crash: true,
+        // `engram serve` double-forks: the spawned parent exits at once and
+        // the daemon grandchild (PPID 1) does the work. Supervise the :4545
+        // listener, not the launcher PID.
+        daemonizes: true,
+        health_port: Some(4545),
     }
 }
