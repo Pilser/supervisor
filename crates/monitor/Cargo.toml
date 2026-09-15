@@ -18,5 +18,5 @@ anyhow = { workspace = true }
 tokio = { workspace = true }
 sysinfo = { workspace = true }
 sha2 = "0.10"
-reqwest = { workspace = true }
+reqwest = { workspace = true, features = ["stream"] }
 futures-util = { workspace = true }
