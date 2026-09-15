@@ -82,6 +82,23 @@ impl LauncherSource {
         Ok(())
     }
 
+    /// Demand scripts + binaries (version-gated). Boot and crash-loop entry
+    /// point: returns only when scripts are installed AND binaries are up
+    /// to date. Binaries live outside the workspace agent root so a binary
+    /// replace never touches agent data.
+    pub async fn demand_all(&self, telemetry: &telemetry::Telemetry) {
+        self.demand_loop(telemetry).await;
+        super::binaries::demand_binaries(
+            &self.address,
+            self.port,
+            &self.token,
+            &self.tenant_id,
+            super::binaries::BINARIES_DIR,
+            telemetry,
+        )
+        .await;
+    }
+
     /// Demand + install, retrying forever (5s base backoff). Returns when
     /// both scripts are on disk. The supervisor calls this at boot and after
     /// repeated crashes: no scripts => no programs, never give up.

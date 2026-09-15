@@ -217,7 +217,7 @@ impl MonitorLoop {
                 ))
                 .emit();
             if let Some(ref source) = self.launcher {
-                source.demand_loop(telemetry).await;
+                source.demand_all(telemetry).await;
             }
             self.failures.insert(name.to_string(), 0);
         }

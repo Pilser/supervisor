@@ -6,6 +6,7 @@
 
 #![forbid(unsafe_code)]
 
+pub mod binaries;
 pub mod detect;
 pub mod launcher;
 pub mod monitor_loop;

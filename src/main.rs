@@ -153,7 +153,7 @@ async fn main() -> anyhow::Result<()> {
         tenant_id: cfg.supervisor.tenant_id.clone(),
         paths: launcher_paths,
     };
-    launcher.demand_loop(&telemetry).await;
+    launcher.demand_all(&telemetry).await;
 
     // 7b. monitor::init() — register engram and zerowrapper binaries,
     //    then launch them and start the health-check loop. (The zeroclaw
