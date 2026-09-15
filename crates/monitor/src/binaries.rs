@@ -13,6 +13,20 @@ use futures_util::StreamExt;
 /// Guest dir holding demanded binaries + zw assets + versions.json.
 pub const BINARIES_DIR: &str = "/data/supervisor/binaries";
 
+fn local_versions(dir: &str) -> HashMap<String, String> {
+    std::fs::read_to_string(format!("{dir}/versions.json"))
+        .ok()
+        .and_then(|s| serde_json::from_str(&s).ok())
+        .unwrap_or_default()
+}
+
+fn save_versions(dir: &str, versions: &HashMap<String, String>) {
+    let _ = std::fs::create_dir_all(dir);
+    if let Ok(s) = serde_json::to_string(versions) {
+        let _ = std::fs::write(format!("{dir}/versions.json"), s);
+    }
+}
+
 /// Fetch one file over HTTP (streamed to disk in 256KB pieces — a 92MB
 /// engram never lands in guest RAM), then verify sha256 and install
 /// atomically (tmp + rename: never overwrite a running binary).
