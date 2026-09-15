@@ -27,8 +27,14 @@ pub struct MonitorLoop {
     pub agent_state_path: Option<PathBuf>,
     /// Consecutive restart failures per program.
     pub failures: HashMap<String, u32>,
-    /// Give up and escalate after this many restart failures.
+    /// After this many restart failures, re-demand launcher scripts from
+    /// the wrapper and try again (never give up: a fixed portal-side script
+    /// eventually arrives and the programs start working).
     pub max_restarts: u32,
+    /// Where launcher scripts come from (None = baked paths only, used in
+    /// tests). Set in production: enables the demand-loop on boot and the
+    /// re-demand after repeated crashes.
+    pub launcher: Option<crate::launcher::LauncherSource>,
 }
 
 impl MonitorLoop {
@@ -39,13 +45,20 @@ impl MonitorLoop {
             children: HashMap::new(),
             agent_state_path: None,
             failures: HashMap::new(),
-            max_restarts: 5,
+            max_restarts: 3,
+            launcher: None,
         }
     }
 
     /// Set the path the agent writes its health state to.
     pub fn with_agent_state_path(mut self, path: PathBuf) -> Self {
         self.agent_state_path = Some(path);
+        self
+    }
+
+    /// Set the launcher source (wrapper demand endpoint + output paths).
+    pub fn with_launcher(mut self, source: crate::launcher::LauncherSource) -> Self {
+        self.launcher = Some(source);
         self
     }
 
@@ -189,13 +202,24 @@ impl MonitorLoop {
         let failures = self.failures.entry(name.to_string()).or_insert(0);
         *failures += 1;
         if *failures > self.max_restarts {
-            escalate_to_wrapper(
-                name,
-                &format!("exceeded {} restart attempts", self.max_restarts),
-                telemetry,
-            )?;
+            // Crashed max_restarts times: the launcher script itself is
+            // suspect. Wait, re-demand scripts from the wrapper (a fixed
+            // portal-side script eventually arrives), reset the counter and
+            // relaunch. Never give up.
+            telemetry
+                .builder()
+                .level(telemetry::Level::Warn)
+                .kind("monitor.redemand")
+                .category("monitor")
+                .message(format!(
+                    "{name} crashed {} times, re-demanding launcher scripts",
+                    self.max_restarts
+                ))
+                .emit();
+            if let Some(ref source) = self.launcher {
+                source.demand_loop(telemetry).await;
+            }
             self.failures.insert(name.to_string(), 0);
-            return Ok(());
         }
         // A daemonizing server outlives its launcher: kill the real daemon
         // by exact process name (== spec name by convention) so the fresh

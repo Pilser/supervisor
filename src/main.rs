@@ -133,7 +133,29 @@ async fn main() -> anyhow::Result<()> {
         ))
         .emit();
 
-    // 7. monitor::init() — register engram and zerowrapper binaries,
+    // 7. Demand launcher scripts from the wrapper (retry forever — nothing
+    //    is baked into the image), write them to the configured program
+    //    paths, then register + launch. A later crash-loop re-demands.
+    // Output paths are the configured program binaries (fetch keys are
+    // "zw"/"engram"; the monitor registry calls the zw program "zerowrapper").
+    let mut launcher_paths = std::collections::HashMap::new();
+    launcher_paths.insert(
+        "engram".to_string(),
+        cfg.programs.engram.binary.clone(),
+    );
+    if let Some(ref zw) = cfg.programs.zerowrapper {
+        launcher_paths.insert("zw".to_string(), zw.binary.clone());
+    }
+    let launcher = monitor::LauncherSource {
+        address: cfg.wrapper.address.clone(),
+        port: cfg.wrapper.port,
+        token: cfg.wrapper.auth_token.clone(),
+        tenant_id: cfg.supervisor.tenant_id.clone(),
+        paths: launcher_paths,
+    };
+    launcher.demand_loop(&telemetry).await;
+
+    // 7b. monitor::init() — register engram and zerowrapper binaries,
     //    then launch them and start the health-check loop. (The zeroclaw
     //    agent is gone: zw runs its baked-in engine; no daemon socket exists
     //    anymore, so there is no socket-health healing either.)
@@ -150,6 +172,7 @@ async fn main() -> anyhow::Result<()> {
     }
 
     let mut monitor_loop = monitor::MonitorLoop::new(registry);
+    monitor_loop = monitor_loop.with_launcher(launcher);
     if let Some(ref p) = cfg.monitor.agent_state_path {
         monitor_loop = monitor_loop.with_agent_state_path(std::path::PathBuf::from(p));
     }

@@ -7,12 +7,14 @@
 #![forbid(unsafe_code)]
 
 pub mod detect;
+pub mod launcher;
 pub mod monitor_loop;
 pub mod programs;
 pub mod recover;
 pub mod report;
 pub mod watcher;
 
+pub use launcher::LauncherSource;
 pub use monitor_loop::MonitorLoop;
 pub use programs::{engram_spec, zerowrapper_spec, ProgramRegistry, ProgramSpec};
 pub use report::{EventLog, MonitorStats, ProgramStatus};
