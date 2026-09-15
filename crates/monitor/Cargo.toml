@@ -16,4 +16,3 @@ uuid = { workspace = true }
 anyhow = { workspace = true }
 tokio = { workspace = true }
 sysinfo = { workspace = true }
-libc = "0.2"

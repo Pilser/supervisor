@@ -4,8 +4,13 @@ use shared::Result;
 
 use crate::programs::ProgramSpec;
 
-/// Restart `spec` by spawning its binary. Stub: records intent via telemetry.
-pub async fn restart_program(spec: &ProgramSpec, telemetry: &telemetry::Telemetry) -> Result<()> {
+/// Restart `spec` by spawning its binary. Returns the child handle: the
+/// caller must keep it (and poll `try_wait()`) — a dropped handle leaks a
+/// zombie that defeats liveness checks.
+pub async fn restart_program(
+    spec: &ProgramSpec,
+    telemetry: &telemetry::Telemetry,
+) -> Result<tokio::process::Child> {
     telemetry
         .builder()
         .level(telemetry::Level::Info)
@@ -15,7 +20,7 @@ pub async fn restart_program(spec: &ProgramSpec, telemetry: &telemetry::Telemetr
         .emit();
     let mut cmd = tokio::process::Command::new(&spec.binary);
     cmd.args(&spec.args);
-    cmd.spawn().map_err(|e| {
+    let child = cmd.spawn().map_err(|e| {
         shared::SupervisorError::Monitor(format!("failed to restart {}: {e}", spec.name))
     })?;
     telemetry
@@ -25,5 +30,5 @@ pub async fn restart_program(spec: &ProgramSpec, telemetry: &telemetry::Telemetr
         .category("monitor")
         .message(format!("restarted {}", spec.name))
         .emit();
-    Ok(())
+    Ok(child)
 }

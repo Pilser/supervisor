@@ -9,6 +9,5 @@ pub fn custom_spec(name: &str, binary: &str, args: Vec<String>) -> ProgramSpec {
         binary: binary.to_string(),
         args,
         restart_on_crash: true,
-        match_name: None,
     }
 }

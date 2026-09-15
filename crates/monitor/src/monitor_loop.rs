@@ -20,6 +20,9 @@ use crate::watcher::{
 pub struct MonitorLoop {
     pub registry: ProgramRegistry,
     pub running: HashMap<String, WatchedProcess>,
+    /// Owned child handles. Kept (never forgotten): `try_wait()` both
+    /// detects exits AND reaps the zombie, which a bare PID watch cannot do.
+    children: HashMap<String, tokio::process::Child>,
     /// Path to the agent's state file (state/daemon_state.json), if any.
     pub agent_state_path: Option<PathBuf>,
     /// Consecutive restart failures per program.
@@ -33,6 +36,7 @@ impl MonitorLoop {
         Self {
             registry,
             running: HashMap::new(),
+            children: HashMap::new(),
             agent_state_path: None,
             failures: HashMap::new(),
             max_restarts: 5,
@@ -78,35 +82,34 @@ impl MonitorLoop {
         let pid = child.id().ok_or_else(|| {
             shared::SupervisorError::Monitor(format!("no pid for {}", spec.name))
         })?;
-        // Keep the child handle alive so it doesn't get reaped/dropped.
+        // Keep the child handle: try_wait() in tick() both detects exits and
+        // reaps them. A forgotten handle leaks a zombie that reads as alive.
         let watched = watch_process(pid, &spec.name, telemetry)?;
         self.running.insert(spec.name.clone(), watched);
-        // Detach: forget the child handle (the supervisor is the parent and the
-        // process table is what we watch).
-        std::mem::forget(child);
+        self.children.insert(spec.name.clone(), child);
         Ok(())
-    }
-
-    /// Reap exited children (non-blocking). The supervisor is PID 1 in the
-    /// guest and launches daemons without keeping child handles, so exited
-    /// processes linger as zombies unless someone waitpid()s them — and a
-    /// zombie PID still "exists", which would defeat liveness checks.
-    fn reap_children() {
-        #[cfg(unix)]
-        loop {
-            // SAFETY: waitpid(-1, WNOHANG) only reaps already-exited
-            // children; it never blocks and touches no Rust state.
-            let r = unsafe { libc::waitpid(-1, std::ptr::null_mut(), libc::WNOHANG) };
-            if r <= 0 {
-                break;
-            }
-        }
     }
 
     /// Run one health-check tick: probe every program, restart the dead ones.
     pub async fn tick(&mut self, telemetry: &telemetry::Telemetry) -> Result<()> {
-        Self::reap_children();
         let mut crashed: Vec<String> = Vec::new();
+
+        // Owned handles first: try_wait() reaps exited children (no zombies)
+        // and reports the exit, race-free.
+        let mut exited: Vec<String> = Vec::new();
+        for (name, child) in self.children.iter_mut() {
+            match child.try_wait() {
+                Ok(Some(_)) => exited.push(name.clone()),
+                Ok(None) => {}
+                Err(_) => exited.push(name.clone()),
+            }
+        }
+        for name in exited {
+            self.children.remove(&name);
+            if !crashed.contains(&name) {
+                crashed.push(name);
+            }
+        }
 
         for (name, proc) in &self.running {
             match health_check(proc.pid, name, telemetry)? {
@@ -166,34 +169,16 @@ impl MonitorLoop {
             return Ok(());
         }
         self.running.remove(name);
-        restart_program(&spec, telemetry).await?;
-        // Re-register the new PID.
-        if let Some(child_pid) = self.last_launched_pid(&spec) {
-            let watched = watch_process(child_pid, name, telemetry)?;
-            self.running.insert(name.to_string(), watched);
-        }
+        self.children.remove(name);
+        let child = restart_program(&spec, telemetry).await?;
+        // Re-register the new PID from the owned handle (exact, no ps scan).
+        let child_pid = child.id().ok_or_else(|| {
+            shared::SupervisorError::Monitor(format!("no pid for restarted {name}"))
+        })?;
+        let watched = watch_process(child_pid, name, telemetry)?;
+        self.running.insert(name.to_string(), watched);
+        self.children.insert(name.to_string(), child);
         Ok(())
-    }
-
-    fn last_launched_pid(&self, spec: &ProgramSpec) -> Option<u32> {
-        // Find the PID of the most recently spawned process matching the
-        // daemon name (launch scripts exec the real binary, so ps shows the
-        // daemon name, not the script path).
-        let mut sys = sysinfo::System::new_all();
-        sys.refresh_processes(sysinfo::ProcessesToUpdate::All, true);
-        let binary = std::path::Path::new(&spec.binary);
-        let bin_name = spec
-            .match_name
-            .as_deref()
-            .or_else(|| binary.file_name().and_then(|n| n.to_str()));
-        sys.processes()
-            .values()
-            .filter(|p| match bin_name {
-                Some(name) => p.name().eq_ignore_ascii_case(name),
-                None => false,
-            })
-            .max_by_key(|p| p.start_time())
-            .map(|p| p.pid().as_u32())
     }
 
     /// Spawn the loop as a long-running task. Returns when `cancel` fires.

@@ -9,7 +9,5 @@ pub fn engram_spec(binary: &str) -> ProgramSpec {
         binary: binary.to_string(),
         args: vec![],
         restart_on_crash: true,
-        // launch-engram.sh ends in `exec engram serve`: ps shows "engram".
-        match_name: Some("engram".to_string()),
     }
 }

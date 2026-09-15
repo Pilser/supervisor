@@ -12,12 +12,6 @@ pub struct ProgramSpec {
     pub binary: String,
     pub args: Vec<String>,
     pub restart_on_crash: bool,
-    /// Process name to match when re-discovering a PID after a restart.
-    /// Needed when `binary` is a launch script that `exec`s the real daemon
-    /// (ps shows the daemon name, not the script). Falls back to the binary
-    /// file name when unset.
-    #[serde(default)]
-    pub match_name: Option<String>,
 }
 
 /// Named set of programs under supervision.
