@@ -95,8 +95,7 @@ pub struct ProgramSection {
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ProgramsSection {
-    pub agent: ProgramSection,
-    pub memory: ProgramSection,
+    pub engram: ProgramSection,
     #[serde(default)]
     pub zerowrapper: Option<ProgramSection>,
 }

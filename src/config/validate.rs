@@ -32,8 +32,8 @@ pub fn validate_config(cfg: &SupervisorConfig) -> supervisor_core::Result<()> {
     if cfg.deployment.port == 0 {
         return Err(supervisor_core::SupervisorError::Config("deployment.port is 0".into()));
     }
-    if cfg.programs.agent.binary.is_empty() || cfg.programs.memory.binary.is_empty() {
-        return Err(supervisor_core::SupervisorError::Config("program binary is empty".into()));
+    if cfg.programs.engram.binary.is_empty() {
+        return Err(supervisor_core::SupervisorError::Config("programs.engram.binary is empty".into()));
     }
     match cfg.telemetry.output.as_str() {
         "disk" | "forward" | "both" | "none" => {}

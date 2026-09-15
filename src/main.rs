@@ -133,15 +133,13 @@ async fn main() -> anyhow::Result<()> {
         ))
         .emit();
 
-    // 7. monitor::init() — register agent, memory and zerowrapper binaries,
-    //    then launch them and start the health-check loop.
+    // 7. monitor::init() — register engram and zerowrapper binaries,
+    //    then launch them and start the health-check loop. (The zeroclaw
+    //    agent is gone: zw runs its baked-in engine; no daemon socket exists
+    //    anymore, so there is no socket-health healing either.)
     let mut registry = monitor::ProgramRegistry::new();
     registry.register(
-        monitor::agent_spec(&cfg.programs.agent.binary),
-        &telemetry,
-    )?;
-    registry.register(
-        monitor::memory_spec(&cfg.programs.memory.binary),
+        monitor::engram_spec(&cfg.programs.engram.binary),
         &telemetry,
     )?;
     if let Some(ref zw) = cfg.programs.zerowrapper {
@@ -155,14 +153,7 @@ async fn main() -> anyhow::Result<()> {
     if let Some(ref p) = cfg.monitor.agent_state_path {
         monitor_loop = monitor_loop.with_agent_state_path(std::path::PathBuf::from(p));
     }
-    // Socket-health healing: a live PID is not proof of service (snapshot
-    // restores leave running daemons with dead listeners). Env override for
-    // tests; the guest launch layout is the default.
-    let agent_socket = std::env::var("AGENT_SOCKET")
-        .unwrap_or_else(|_| "/data/zeroclaw/data/daemon.sock".to_string());
-    monitor_loop =
-        monitor_loop.with_agent_socket_path(std::path::PathBuf::from(agent_socket));
-    // Launch all registered programs (agent, memory, zerowrapper).
+    // Launch all registered programs (engram, zerowrapper).
     monitor_loop.launch_all(&telemetry).await?;
     telemetry
         .builder()
@@ -170,9 +161,8 @@ async fn main() -> anyhow::Result<()> {
         .kind("monitor.register")
         .category("monitor")
         .message(format!(
-            "monitor launched agent={} memory={} zerowrapper={} (interval={}s)",
-            cfg.programs.agent.binary,
-            cfg.programs.memory.binary,
+            "monitor launched engram={} zerowrapper={} (interval={}s)",
+            cfg.programs.engram.binary,
             cfg.programs.zerowrapper.as_ref().map(|z| z.binary.as_str()).unwrap_or("none"),
             cfg.monitor.check_interval_seconds
         ))
