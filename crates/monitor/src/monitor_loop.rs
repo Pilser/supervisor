@@ -87,8 +87,25 @@ impl MonitorLoop {
         Ok(())
     }
 
+    /// Reap exited children (non-blocking). The supervisor is PID 1 in the
+    /// guest and launches daemons without keeping child handles, so exited
+    /// processes linger as zombies unless someone waitpid()s them — and a
+    /// zombie PID still "exists", which would defeat liveness checks.
+    fn reap_children() {
+        #[cfg(unix)]
+        loop {
+            // SAFETY: waitpid(-1, WNOHANG) only reaps already-exited
+            // children; it never blocks and touches no Rust state.
+            let r = unsafe { libc::waitpid(-1, std::ptr::null_mut(), libc::WNOHANG) };
+            if r <= 0 {
+                break;
+            }
+        }
+    }
+
     /// Run one health-check tick: probe every program, restart the dead ones.
-    pub async fn tick(&mut self, telemetry: &telemetry::Telemetry) -> Result<()> {
+    pub async fn tick(&mut self, telemetry: &Telemetry) -> Result<()> {
+        Self::reap_children();
         let mut crashed: Vec<String> = Vec::new();
 
         for (name, proc) in &self.running {

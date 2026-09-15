@@ -1,0 +1,79 @@
+portfolio tools - supervisor binary
+binary: /home/vox/.AAAPROJECTS/FPE/AI-plan/deployment/supervisor/supervisor
+usage: portfolio [OPTIONS] <COMMAND> | supervisor portfolio [OPTIONS] <COMMAND> | supervisor <COMMAND>
+global flags:
+  --wrapper-address <ADDR>  default 172.16.0.1  env WRAPPER_ADDRESS
+  --wrapper-port <PORT>  default 9090  env WRAPPER_PORT
+  --token <TOKEN>  default ""  env WRAPPER_TOKEN
+  --tenant-id <ID>  env TENANT_ID
+  -h, --help
+
+show - show portfolio summary
+  portfolio show [--json]
+
+update - update profile
+  portfolio update [--name <NAME>] [--nickname <NICKNAME>] [--track <TRACK>] [--language <LANGUAGE>] [--timezone <TIMEZONE>]
+
+goal create - create goal
+  portfolio goal create --title <TITLE> [--track <TRACK>] [--target-date <YYYY-MM-DD>]
+goal update - update goal
+  portfolio goal update --id <ID> [--title <TITLE>] [--status <active|done|paused>] [--target-date <DATE>]
+goal list - list goals
+  portfolio goal list [--status <STATUS>] [--limit <LIMIT>]
+goal get - get goal by id
+  portfolio goal get --id <ID>
+
+milestone add - add milestone under goal
+  portfolio milestone add --goal <GOAL_ID> --title <TITLE> [--order <ORDER>]
+milestone list - list milestones for goal
+  portfolio milestone list --goal <GOAL_ID>
+milestone update - update milestone
+  portfolio milestone update --id <ID> [--title <TITLE>] [--status <open|done>]
+
+task create - create task under milestone
+  portfolio task create --milestone <ID> --title <TITLE> --kind <task|question|exercise> [--description <TEXT>] [--difficulty <easy|medium|hard>]
+task update - update task
+  portfolio task update --id <ID> [--title <TITLE>] [--status <open|done|blocked>] [--description <TEXT>]
+task list - list tasks
+  portfolio task list [--milestone <ID>] [--status <STATUS>] [--kind <KIND>]
+task get - get task by id
+  portfolio task get --id <ID>
+
+attempt submit - submit attempt for task
+  portfolio attempt submit --task <TASK_ID> --result <pass|fail|partial> --output <OUTPUT> [--feedback <TEXT>]
+attempt resolve - resolve attempt with example
+  portfolio attempt resolve --id <ID> --example <EXAMPLE> [--note <NOTE>]
+attempt list - list attempts for task
+  portfolio attempt list --task <TASK_ID> [--limit <LIMIT>]
+attempt get - get attempt by id
+  portfolio attempt get --id <ID>
+
+skill record - record skill
+  portfolio skill record --name <NAME> [--domain <DOMAIN>] [--level <novice|practicing|skilled|master>] [--evidence <ATTEMPT_ID>] [--confidence <0..1>]
+skill update - update skill
+  portfolio skill update --id <ID> [--level <LEVEL>] [--evidence <ATTEMPT_ID>]
+skill list - list skills
+  portfolio skill list [--domain <DOMAIN>]
+skill get - get skill by id
+  portfolio skill get --id <ID>
+
+achievement award - award achievement
+  portfolio achievement award --title <TITLE> [--skill <SKILL_ID>] [--task <TASK_ID>]
+achievement list - list achievements
+  portfolio achievement list [--limit <LIMIT>]
+achievement get - get achievement by id
+  portfolio achievement get --id <ID>
+
+report generate - generate report
+  portfolio report generate --period <weekly|monthly> [--content <TEXT>]
+report list - list reports
+  portfolio report list [--limit <LIMIT>]
+report get - get report by id
+  portfolio report get --id <ID>
+
+timeline list - list timeline diary
+  portfolio timeline list [--kind <KIND>] [--since <RFC3339>] [--limit <LIMIT>]
+timeline get - get timeline entry by id
+  portfolio timeline get --id <ID>
+timeline add - add timeline note
+  portfolio timeline add --summary <SUMMARY> [--kind <KIND>] [--ref-id <ID>] [--ref-type <TYPE>]

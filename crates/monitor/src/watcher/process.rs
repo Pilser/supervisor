@@ -34,8 +34,13 @@ pub fn watch_process(
     })
 }
 
-/// True when the PID still exists in the process table.
+/// True when the PID exists AND is not a zombie. Zombies keep their PID
+/// in the table until the parent reaps them; without this check a dead
+/// (unreaped) child reads as alive forever and is never restarted.
 pub fn is_running(pid: u32) -> bool {
     let sys = sysinfo::System::new_all();
-    sys.process(sysinfo::Pid::from_u32(pid)).is_some()
+    match sys.process(sysinfo::Pid::from_u32(pid)) {
+        Some(p) => p.status() != sysinfo::ProcessStatus::Zombie,
+        None => false,
+    }
 }
