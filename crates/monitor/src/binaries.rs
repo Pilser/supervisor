@@ -73,7 +73,7 @@ async fn fetch_file(
                 .duration_since(std::time::UNIX_EPOCH)
                 .map(|d| d.as_secs().to_string())
                 .unwrap_or_default(),
-            "payload": {"token": token, "path": path, "offset": offset, "len": 262144},
+            "payload": {"token": token, "path": path, "offset": offset, "len": 1048576},
         });
         let resp = client.send_json(envelope).await?;
         let payload = resp
