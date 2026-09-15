@@ -112,6 +112,11 @@ impl MonitorLoop {
         }
 
         for (name, proc) in &self.running {
+            // Already flagged via try_wait() above: pushing twice would
+            // restart the program twice and duplicate the daemon.
+            if crashed.contains(name) {
+                continue;
+            }
             match health_check(proc.pid, name, telemetry)? {
                 HealthStatus::Alive => {}
                 _ => crashed.push(name.clone()),
