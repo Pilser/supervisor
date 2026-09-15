@@ -145,7 +145,7 @@ pub async fn demand_binaries(
                     .level(telemetry::Level::Info)
                     .kind("binaries.installed")
                     .category("deployment")
-                    .message(format!("installed {n} guest binaries".to_string()))
+                    .message(format!("installed {n} guest binaries"))
                     .emit();
                 return;
             }
