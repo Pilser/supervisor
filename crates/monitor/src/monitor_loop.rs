@@ -109,7 +109,7 @@ impl MonitorLoop {
     const STARTUP_GRACE_SECS: u64 = 90;
 
     /// Run one health-check tick: probe every program, restart the dead ones.
-    pub async fn tick(&mut self, telemetry: &Telemetry) -> Result<()> {
+    pub async fn tick(&mut self, telemetry: &telemetry::Telemetry) -> Result<()> {
         let mut crashed: Vec<String> = Vec::new();
         let now = shared::now_unix_millis();
 
