@@ -103,6 +103,19 @@ fn url_encode(s: &str) -> String {
         .collect()
 }
 
+/// Local stamp says every file is present: skip without touching the
+/// network. Binaries move ONLY on admin push (which deletes the stamp) or
+/// first boot (no stamp yet) — never on their own, so the host stays idle.
+fn stamp_complete(dir: &str) -> bool {
+    let versions: HashMap<String, String> = local_versions(dir);
+    if versions.is_empty() {
+        return false;
+    }
+    versions
+        .keys()
+        .all(|p| std::path::Path::new(&format!("{dir}/{p}")).exists())
+}
+
 /// Demand changed binaries (version-gated). Retries forever like launchers.
 pub async fn demand_binaries(
     address: &str,
@@ -115,6 +128,16 @@ pub async fn demand_binaries(
     let _ = (address, port, tenant_id);
     // Binaries are served by the wrapper's HTTP listener (172.16.0.1:18080):
     // plain streaming, no NDJSON/base64 framing, no in-RAM assembly.
+    if stamp_complete(dir) {
+        telemetry
+            .builder()
+            .level(telemetry::Level::Info)
+            .kind("binaries.skipped")
+            .category("deployment")
+            .message("guest binaries present, no admin push pending".to_string())
+            .emit();
+        return;
+    }
     let base = "http://172.16.0.1:18080";
     let mut wait = std::time::Duration::from_secs(5);
     loop {
