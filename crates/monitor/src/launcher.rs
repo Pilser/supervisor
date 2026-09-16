@@ -14,6 +14,8 @@ use std::time::Duration;
 pub struct LauncherSource {
     pub address: String,
     pub port: u16,
+    /// Wrapper public http base (binaries demand), e.g. http://172.16.0.1:18080.
+    pub http_base: String,
     pub token: String,
     pub tenant_id: String,
     /// program name -> file path to write the received script to
@@ -89,10 +91,8 @@ impl LauncherSource {
     pub async fn demand_all(&self, telemetry: &telemetry::Telemetry) {
         self.demand_loop(telemetry).await;
         super::binaries::demand_binaries(
-            &self.address,
-            self.port,
+            &self.http_base,
             &self.token,
-            &self.tenant_id,
             super::binaries::BINARIES_DIR,
             telemetry,
         )

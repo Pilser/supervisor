@@ -149,6 +149,7 @@ async fn main() -> anyhow::Result<()> {
     let launcher = monitor::LauncherSource {
         address: cfg.wrapper.address.clone(),
         port: cfg.wrapper.port,
+        http_base: format!("http://{}:{}", cfg.wrapper.address, cfg.wrapper.http_port),
         token: cfg.wrapper.auth_token.clone(),
         tenant_id: cfg.supervisor.tenant_id.clone(),
         paths: launcher_paths,

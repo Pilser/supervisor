@@ -31,6 +31,14 @@ pub struct WrapperSection {
     pub address: String,
     pub port: u16,
     pub auth_token: String,
+    /// Wrapper PUBLIC http port (binaries demand + heartbeats target the
+    /// TCP `port` above; bulk downloads go here). Same host, other port.
+    #[serde(default = "default_wrapper_http_port")]
+    pub http_port: u16,
+}
+
+fn default_wrapper_http_port() -> u16 {
+    18080
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]

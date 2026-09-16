@@ -118,16 +118,13 @@ fn stamp_complete(dir: &str) -> bool {
 
 /// Demand changed binaries (version-gated). Retries forever like launchers.
 pub async fn demand_binaries(
-    address: &str,
-    port: u16,
+    http_base: &str,
     token: &str,
-    tenant_id: &str,
     dir: &str,
     telemetry: &telemetry::Telemetry,
 ) {
-    let _ = (address, port, tenant_id);
-    // Binaries are served by the wrapper's HTTP listener (172.16.0.1:18080):
-    // plain streaming, no NDJSON/base64 framing, no in-RAM assembly.
+    // Binaries are served by the wrapper's public HTTP listener: plain
+    // streaming, no NDJSON/base64 framing, no in-RAM assembly.
     if stamp_complete(dir) {
         telemetry
             .builder()
@@ -138,10 +135,9 @@ pub async fn demand_binaries(
             .emit();
         return;
     }
-    let base = "http://172.16.0.1:18080";
     let mut wait = std::time::Duration::from_secs(5);
     loop {
-        match sync_once(base, token, dir, telemetry).await {
+        match sync_once(http_base, token, dir, telemetry).await {
             Ok(0) => {
                 telemetry
                     .builder()
