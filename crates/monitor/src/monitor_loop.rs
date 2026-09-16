@@ -103,9 +103,15 @@ impl MonitorLoop {
         Ok(())
     }
 
+    /// Seconds after a (re)launch during which failures don't count.
+    /// Slow starters (engram loads the helix DB + warms embeddings before
+    /// :4545 opens) would otherwise be killed before they ever get healthy.
+    const STARTUP_GRACE_SECS: u64 = 90;
+
     /// Run one health-check tick: probe every program, restart the dead ones.
-    pub async fn tick(&mut self, telemetry: &telemetry::Telemetry) -> Result<()> {
+    pub async fn tick(&mut self, telemetry: &Telemetry) -> Result<()> {
         let mut crashed: Vec<String> = Vec::new();
+        let now = shared::now_unix_millis();
 
         // Owned handles first: try_wait() reaps exited children (no zombies)
         // and reports the exit, race-free. A `daemonizes` launcher exiting
@@ -134,6 +140,11 @@ impl MonitorLoop {
             // Already flagged via try_wait() above: pushing twice would
             // restart the program twice and duplicate the daemon.
             if crashed.contains(name) {
+                continue;
+            }
+            // Startup grace: a freshly (re)launched program gets time to
+            // open its port before failures count. Reaping above still ran.
+            if now.saturating_sub(proc.started_unix_millis) < Self::STARTUP_GRACE_SECS * 1000 {
                 continue;
             }
             // Daemonizing servers are watched by port, not by launcher PID.
