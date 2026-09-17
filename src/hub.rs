@@ -200,6 +200,7 @@ pub async fn run_from_args(args: Vec<String>) -> anyhow::Result<()> {
         }
         HubCommand::Activate { target } => {
             let (t, code) = resolve_target(&hub, &me, target.clone())?;
+            eprintln!("hub -> {t}");
             let resp = hcall(&hub, &me, "hub.activate", "db_write",
                 json!({"target_tenant": t, "code": code})).await?;
             println!("{}", serde_json::to_string_pretty(&resp)?);
@@ -207,6 +208,7 @@ pub async fn run_from_args(args: Vec<String>) -> anyhow::Result<()> {
         }
         HubCommand::Engram { path, method, data } => {
             let (t, code) = resolve_target(&hub, &me, None)?;
+            eprintln!("hub -> {t}");
             let body: Option<Value> = data.as_deref().map(|d| {
                 serde_json::from_str(d).map_err(|e| anyhow::anyhow!("bad --data JSON: {e}"))
             }).transpose()?;
@@ -271,6 +273,7 @@ async fn hub_portfolio(hub: &HubCli, me: &str, cmd: cli::Command) -> anyhow::Res
     let (op, rtype, mut data) = cli::portfolio_op(&cmd);
     let hub_op = op.replacen("portfolio.", "hub.", 1);
     let (target, code) = resolve_target(hub, me, None)?;
+    eprintln!("hub -> {target}");
     if let Some(obj) = data.as_object_mut() {
         obj.insert("target_tenant".to_string(), Value::String(target));
         obj.insert("code".to_string(), code.map(Value::String).unwrap_or(Value::Null));
