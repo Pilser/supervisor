@@ -114,6 +114,9 @@ fn load_state() -> HubState {
 
 fn save_state(st: &HubState) -> anyhow::Result<()> {
     let p = state_path().ok_or_else(|| anyhow::anyhow!("HOME not set"))?;
+    if let Some(parent) = p.parent() {
+        std::fs::create_dir_all(parent)?;
+    }
     std::fs::write(p, serde_json::to_string_pretty(st)?)?;
     Ok(())
 }
@@ -146,15 +149,16 @@ async fn hcall(
     crate::cli::call(owner, op, rtype, data, &cli).await
 }
 
-/// Resolve (target, code): explicit flags win, else loaded state.
-fn resolve_target(hub: &HubCli, arg_target: Option<String>) -> anyhow::Result<(String, Option<String>)> {
+/// Resolve (target, code): explicit flags win, else loaded state, else self
+/// (the owner always works on their own portfolio without `use`).
+fn resolve_target(hub: &HubCli, me: &str, arg_target: Option<String>) -> anyhow::Result<(String, Option<String>)> {
     let st = load_state();
     let target = hub
         .to
         .clone()
         .or(arg_target)
         .or_else(|| if st.target_tenant.is_empty() { None } else { Some(st.target_tenant.clone()) })
-        .ok_or_else(|| anyhow::anyhow!("no target (run `hubportfolio use <tenant-id> [code]` or pass --to)"))?;
+        .unwrap_or_else(|| me.to_string());
     let code = hub.code.clone().or(st.code.clone()).filter(|c| !c.is_empty());
     Ok((target, code))
 }
@@ -166,7 +170,9 @@ pub async fn run_from_args(args: Vec<String>) -> anyhow::Result<()> {
         HubCommand::Use { target, code } => {
             // Verify before saving: owner always passes; foreign needs grant/code.
             let data = json!({"target_tenant": target, "code": code});
-            let resp = hcall(&hub, &me, "hub.show", "db_read", data).await?;
+            let resp = hcall(&hub, &me, "hub.show", "db_read", data).await.map_err(|e| {
+                anyhow::anyhow!("cannot load tenant {target}: {e} (wrong/expired code, or no grant)")
+            })?;
             if resp.get("error").is_some() {
                 println!("{}", serde_json::to_string_pretty(&resp)?);
                 anyhow::bail!("cannot load tenant {target}");
@@ -193,14 +199,14 @@ pub async fn run_from_args(args: Vec<String>) -> anyhow::Result<()> {
             Ok(())
         }
         HubCommand::Activate { target } => {
-            let (t, code) = resolve_target(&hub, target.clone())?;
+            let (t, code) = resolve_target(&hub, &me, target.clone())?;
             let resp = hcall(&hub, &me, "hub.activate", "db_write",
                 json!({"target_tenant": t, "code": code})).await?;
             println!("{}", serde_json::to_string_pretty(&resp)?);
             Ok(())
         }
         HubCommand::Engram { path, method, data } => {
-            let (t, code) = resolve_target(&hub, None)?;
+            let (t, code) = resolve_target(&hub, &me, None)?;
             let body: Option<Value> = data.as_deref().map(|d| {
                 serde_json::from_str(d).map_err(|e| anyhow::anyhow!("bad --data JSON: {e}"))
             }).transpose()?;
@@ -264,7 +270,7 @@ pub async fn run_from_args(args: Vec<String>) -> anyhow::Result<()> {
 async fn hub_portfolio(hub: &HubCli, me: &str, cmd: cli::Command) -> anyhow::Result<()> {
     let (op, rtype, mut data) = cli::portfolio_op(&cmd);
     let hub_op = op.replacen("portfolio.", "hub.", 1);
-    let (target, code) = resolve_target(hub, None)?;
+    let (target, code) = resolve_target(hub, me, None)?;
     if let Some(obj) = data.as_object_mut() {
         obj.insert("target_tenant".to_string(), Value::String(target));
         obj.insert("code".to_string(), code.map(Value::String).unwrap_or(Value::Null));

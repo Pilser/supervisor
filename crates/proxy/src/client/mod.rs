@@ -144,7 +144,17 @@ impl ProxyClient {
         self.emit_response(rtype, tenant_id.as_deref(), start.elapsed());
 
         if is_unauthorized(&value) {
-            return Err(ProxyError::Unauthorized("wrapper rejected token".to_string()).into());
+            // Carry the server's reason (e.g. hub "invalid share code")
+            // instead of a bare token message.
+            let detail = value
+                .get("payload")
+                .and_then(|p| {
+                    p.get("error")
+                        .or_else(|| p.get("message"))
+                        .and_then(Value::as_str)
+                })
+                .unwrap_or("wrapper rejected token");
+            return Err(ProxyError::Unauthorized(detail.to_string()).into());
         }
 
         Ok(value)
