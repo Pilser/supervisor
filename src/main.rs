@@ -36,14 +36,23 @@
 
 mod cli;
 mod config;
+mod hub;
 mod logging;
 
 #[tokio::main]
 async fn main() -> anyhow::Result<()> {
     let args: Vec<String> = std::env::args().collect();
+    // hubportfolio binary wins outright (its --help must not fall into portfolio).
+    if hub::is_hub_binary(&args) {
+        return hub::run_from_args(args).await;
+    }
     if cli::is_portfolio_invocation(&args) {
         let nargs = cli::normalize_portfolio_args(args);
         return cli::run_from_args(nargs).await;
+    }
+    if hub::is_hubportfolio_invocation(&args) {
+        let nargs = hub::normalize_hubportfolio_args(args);
+        return hub::run_from_args(nargs).await;
     }
     // 1. Load config.toml.
     let mut cfg = match config::load::load_from_file("config.toml") {
