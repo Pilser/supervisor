@@ -49,10 +49,6 @@ pub enum HubCommand {
     Status,
     /// Wake the target container (needed before engram access).
     Activate { target: Option<String> },
-    /// Call the target's live engram API (1:1 mirror of its CLI).
-    Engram {
-        #[command(subcommand)] cmd: EngramCmd,
-    },
     /// Create a short share code for YOUR portfolio (default: never expires).
     Share {
         #[command(subcommand)] cmd: ShareCmd,
@@ -85,46 +81,6 @@ pub enum HubCommand {
 }
 
 #[derive(Subcommand, Debug)]
-pub enum EngramCmd {
-    /// recall memories: query text, or chain-walk with --follow-seq.
-    Recall {
-        query: Option<String>,
-        #[arg(long)] limit: Option<u64>,
-        #[arg(long)] follow_seq: Option<u64>,
-        #[arg(long)] depth: Option<u64>,
-        #[arg(long)] dir: Option<String>,
-    },
-    /// reward a recall so the memory learns (score -1..1).
-    Reward {
-        score: f64,
-        #[arg(long)] recall_id: Option<u64>,
-        #[arg(long)] attributions: Option<String>,
-    },
-    /// store one episodic memory, optionally chained after --seq.
-    Ingest {
-        text: String,
-        #[arg(long)] seq: Option<u64>,
-        #[arg(long)] seq_pos: Option<i64>,
-    },
-    Stats,
-    Status,
-    Health,
-    Setup,
-    /// run one consolidation cycle.
-    Consolidate {
-        #[arg(long)] aggressive: bool,
-    },
-    TrainReranker,
-    Help,
-    /// escape hatch: forward any path with optional method + JSON body.
-    Raw {
-        path: String,
-        #[arg(long)] method: Option<String>,
-        #[arg(long)] data: Option<String>,
-    },
-}
-
-#[derive(Subcommand, Debug)]
 pub enum ShareCmd {
     Create { #[arg(long)] expire: Option<String> },
     List,
@@ -132,25 +88,25 @@ pub enum ShareCmd {
 }
 
 #[derive(serde::Serialize, serde::Deserialize, Default)]
-struct HubState {
-    target_tenant: String,
-    code: Option<String>,
+pub(crate) struct HubState {
+    pub(crate) target_tenant: String,
+    pub(crate) code: Option<String>,
 }
 
-fn state_path() -> Option<std::path::PathBuf> {
+pub(crate) fn state_path() -> Option<std::path::PathBuf> {
     std::env::var("HOME").ok().map(|h| {
         std::path::Path::new(&h).join(".hubportfolio.json")
     })
 }
 
-fn load_state() -> HubState {
+pub(crate) fn load_state() -> HubState {
     state_path()
         .and_then(|p| std::fs::read_to_string(p).ok())
         .and_then(|s| serde_json::from_str(&s).ok())
         .unwrap_or_default()
 }
 
-fn save_state(st: &HubState) -> anyhow::Result<()> {
+pub(crate) fn save_state(st: &HubState) -> anyhow::Result<()> {
     let p = state_path().ok_or_else(|| anyhow::anyhow!("HOME not set"))?;
     if let Some(parent) = p.parent() {
         std::fs::create_dir_all(parent)?;
@@ -159,7 +115,7 @@ fn save_state(st: &HubState) -> anyhow::Result<()> {
     Ok(())
 }
 
-fn own_id(hub: &HubCli) -> anyhow::Result<String> {
+pub(crate) fn own_id(hub: &HubCli) -> anyhow::Result<String> {
     let cli = crate::cli::Cli {
         wrapper_address: hub.wrapper_address.clone(),
         wrapper_port: hub.wrapper_port,
@@ -170,7 +126,7 @@ fn own_id(hub: &HubCli) -> anyhow::Result<String> {
     crate::cli::tenant_id_or_fail(&cli)
 }
 
-async fn hcall(
+pub(crate) async fn hcall(
     hub: &HubCli,
     owner: &str,
     op: &str,
@@ -189,7 +145,7 @@ async fn hcall(
 
 /// Resolve (target, code): explicit flags win, else loaded state, else self
 /// (the owner always works on their own portfolio without `use`).
-fn resolve_target(hub: &HubCli, me: &str, arg_target: Option<String>) -> anyhow::Result<(String, Option<String>)> {
+pub(crate) fn resolve_target(hub: &HubCli, me: &str, arg_target: Option<String>) -> anyhow::Result<(String, Option<String>)> {
     let st = load_state();
     let target = hub
         .to
@@ -241,55 +197,6 @@ pub async fn run_from_args(args: Vec<String>) -> anyhow::Result<()> {
             eprintln!("hub -> {t}");
             let resp = hcall(&hub, &me, "hub.activate", "db_write",
                 json!({"target_tenant": t, "code": code})).await?;
-            println!("{}", serde_json::to_string_pretty(&resp)?);
-            Ok(())
-        }
-        HubCommand::Engram { cmd } => {
-            let (t, code) = resolve_target(&hub, &me, None)?;
-            eprintln!("hub -> {t}");
-            let (path, method, body): (String, Option<String>, Option<Value>) = match cmd {
-                EngramCmd::Recall { query, limit, follow_seq, depth, dir } => {
-                    let mut m = serde_json::Map::new();
-                    if let Some(q) = query { m.insert("query".to_string(), Value::String(q.clone())); }
-                    if let Some(n) = limit { m.insert("limit".to_string(), json!(n)); }
-                    if let Some(f) = follow_seq { m.insert("follow_seq".to_string(), json!(f)); }
-                    if let Some(d) = depth { m.insert("depth".to_string(), json!(d)); }
-                    if let Some(d) = dir { m.insert("dir".to_string(), Value::String(d.clone())); }
-                    ("recall".to_string(), None, Some(Value::Object(m)))
-                }
-                EngramCmd::Reward { score, recall_id, attributions } => {
-                    let mut m = serde_json::Map::new();
-                    m.insert("score".to_string(), json!(score));
-                    if let Some(r) = recall_id { m.insert("recall_id".to_string(), json!(r)); }
-                    if let Some(a) = attributions { m.insert("attributions".to_string(), Value::String(a.clone())); }
-                    ("reward".to_string(), None, Some(Value::Object(m)))
-                }
-                EngramCmd::Ingest { text, seq, seq_pos } => {
-                    let mut m = serde_json::Map::new();
-                    m.insert("text".to_string(), Value::String(text.clone()));
-                    if let Some(p) = seq { m.insert("prev_id".to_string(), json!(p)); }
-                    if let Some(q) = seq_pos { m.insert("seq_pos".to_string(), json!(q)); }
-                    ("ingest".to_string(), None, Some(Value::Object(m)))
-                }
-                EngramCmd::Stats => ("stats".to_string(), None, None),
-                EngramCmd::Status => ("status".to_string(), None, None),
-                EngramCmd::Health => ("health".to_string(), None, None),
-                EngramCmd::Setup => ("setup".to_string(), None, None),
-                EngramCmd::Consolidate { aggressive } => (
-                    "consolidate".to_string(), None,
-                    if *aggressive { Some(json!({"aggressive": true})) } else { None },
-                ),
-                EngramCmd::TrainReranker => ("train-reranker".to_string(), None, None),
-                EngramCmd::Help => ("help".to_string(), None, None),
-                EngramCmd::Raw { path, method, data } => {
-                    let body: Option<Value> = data.as_deref().map(|d| {
-                        serde_json::from_str(d).map_err(|e| anyhow::anyhow!("bad --data JSON: {e}"))
-                    }).transpose()?;
-                    (path.clone(), method.clone(), body)
-                }
-            };
-            let resp = hcall(&hub, &me, "hub.engram", "db_read",
-                json!({"target_tenant": t, "code": code, "path": path, "method": method, "body": body})).await?;
             println!("{}", serde_json::to_string_pretty(&resp)?);
             Ok(())
         }
@@ -379,7 +286,7 @@ pub fn is_hubportfolio_invocation(args: &[String]) -> bool {
         return true;
     }
     const SUBS: &[&str] = &[
-        "use", "leave", "status", "activate", "engram", "share", "access", "block",
+        "use", "leave", "status", "share", "access", "block",
         "unblock", "grantrevoke", "grant-revoke",
     ];
     if args.len() >= 2 && SUBS.contains(&args[1].as_str()) {
@@ -401,7 +308,7 @@ pub fn normalize_hubportfolio_args(args: Vec<String>) -> Vec<String> {
     // invoked as `supervisor use ...` (hub-only word) -> inject prog name.
     // Portfolio-mirror words stay with the portfolio path (checked first).
     const SUBS: &[&str] = &[
-        "use", "leave", "status", "activate", "engram", "share", "access", "block",
+        "use", "leave", "status", "share", "access", "block",
         "unblock", "grantrevoke", "grant-revoke",
     ];
     let prog = std::path::Path::new(&args[0]).file_name().and_then(|s| s.to_str()).unwrap_or("");
