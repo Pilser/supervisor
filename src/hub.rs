@@ -49,11 +49,9 @@ pub enum HubCommand {
     Status,
     /// Wake the target container (needed before engram access).
     Activate { target: Option<String> },
-    /// Call the target's live engram API: `engram recall --data '{"query":"..."}'`.
+    /// Call the target's live engram API (1:1 mirror of its CLI).
     Engram {
-        path: String,
-        #[arg(long)] method: Option<String>,
-        #[arg(long)] data: Option<String>,
+        #[command(subcommand)] cmd: EngramCmd,
     },
     /// Create a short share code for YOUR portfolio (default: never expires).
     Share {
@@ -84,6 +82,46 @@ pub enum HubCommand {
     Achievement { #[command(subcommand)] cmd: AchievementCmd },
     Report { #[command(subcommand)] cmd: ReportCmd },
     Timeline { #[command(subcommand)] cmd: TimelineCmd },
+}
+
+#[derive(Subcommand, Debug)]
+pub enum EngramCmd {
+    /// recall memories: query text, or chain-walk with --follow-seq.
+    Recall {
+        query: Option<String>,
+        #[arg(long)] limit: Option<u64>,
+        #[arg(long)] follow_seq: Option<u64>,
+        #[arg(long)] depth: Option<u64>,
+        #[arg(long)] dir: Option<String>,
+    },
+    /// reward a recall so the memory learns (score -1..1).
+    Reward {
+        score: f64,
+        #[arg(long)] recall_id: Option<u64>,
+        #[arg(long)] attributions: Option<String>,
+    },
+    /// store one episodic memory, optionally chained after --seq.
+    Ingest {
+        text: String,
+        #[arg(long)] seq: Option<u64>,
+        #[arg(long)] seq_pos: Option<i64>,
+    },
+    Stats,
+    Status,
+    Health,
+    Setup,
+    /// run one consolidation cycle.
+    Consolidate {
+        #[arg(long)] aggressive: bool,
+    },
+    TrainReranker,
+    Help,
+    /// escape hatch: forward any path with optional method + JSON body.
+    Raw {
+        path: String,
+        #[arg(long)] method: Option<String>,
+        #[arg(long)] data: Option<String>,
+    },
 }
 
 #[derive(Subcommand, Debug)]
@@ -206,12 +244,50 @@ pub async fn run_from_args(args: Vec<String>) -> anyhow::Result<()> {
             println!("{}", serde_json::to_string_pretty(&resp)?);
             Ok(())
         }
-        HubCommand::Engram { path, method, data } => {
+        HubCommand::Engram { cmd } => {
             let (t, code) = resolve_target(&hub, &me, None)?;
             eprintln!("hub -> {t}");
-            let body: Option<Value> = data.as_deref().map(|d| {
-                serde_json::from_str(d).map_err(|e| anyhow::anyhow!("bad --data JSON: {e}"))
-            }).transpose()?;
+            let (path, method, body): (String, Option<String>, Option<Value>) = match cmd {
+                EngramCmd::Recall { query, limit, follow_seq, depth, dir } => {
+                    let mut m = serde_json::Map::new();
+                    if let Some(q) = query { m.insert("query".to_string(), Value::String(q.clone())); }
+                    if let Some(n) = limit { m.insert("limit".to_string(), json!(n)); }
+                    if let Some(f) = follow_seq { m.insert("follow_seq".to_string(), json!(f)); }
+                    if let Some(d) = depth { m.insert("depth".to_string(), json!(d)); }
+                    if let Some(d) = dir { m.insert("dir".to_string(), Value::String(d.clone())); }
+                    ("recall".to_string(), None, Some(Value::Object(m)))
+                }
+                EngramCmd::Reward { score, recall_id, attributions } => {
+                    let mut m = serde_json::Map::new();
+                    m.insert("score".to_string(), json!(score));
+                    if let Some(r) = recall_id { m.insert("recall_id".to_string(), json!(r)); }
+                    if let Some(a) = attributions { m.insert("attributions".to_string(), Value::String(a.clone())); }
+                    ("reward".to_string(), None, Some(Value::Object(m)))
+                }
+                EngramCmd::Ingest { text, seq, seq_pos } => {
+                    let mut m = serde_json::Map::new();
+                    m.insert("text".to_string(), Value::String(text.clone()));
+                    if let Some(p) = seq { m.insert("prev_id".to_string(), json!(p)); }
+                    if let Some(q) = seq_pos { m.insert("seq_pos".to_string(), json!(q)); }
+                    ("ingest".to_string(), None, Some(Value::Object(m)))
+                }
+                EngramCmd::Stats => ("stats".to_string(), None, None),
+                EngramCmd::Status => ("status".to_string(), None, None),
+                EngramCmd::Health => ("health".to_string(), None, None),
+                EngramCmd::Setup => ("setup".to_string(), None, None),
+                EngramCmd::Consolidate { aggressive } => (
+                    "consolidate".to_string(), None,
+                    if *aggressive { Some(json!({"aggressive": true})) } else { None },
+                ),
+                EngramCmd::TrainReranker => ("train-reranker".to_string(), None, None),
+                EngramCmd::Help => ("help".to_string(), None, None),
+                EngramCmd::Raw { path, method, data } => {
+                    let body: Option<Value> = data.as_deref().map(|d| {
+                        serde_json::from_str(d).map_err(|e| anyhow::anyhow!("bad --data JSON: {e}"))
+                    }).transpose()?;
+                    (path.clone(), method.clone(), body)
+                }
+            };
             let resp = hcall(&hub, &me, "hub.engram", "db_read",
                 json!({"target_tenant": t, "code": code, "path": path, "method": method, "body": body})).await?;
             println!("{}", serde_json::to_string_pretty(&resp)?);
